@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>老汉的小服务器</title>
+<title>老汉移动信息网</title>
 <style>
   :root {
     --bg: #f4f4f1; --card: #ffffff; --ink: #1d1d1b; --muted: #77756f; --line: #e3e1db;
@@ -16,6 +16,7 @@
             color-scheme: dark; }
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   body { margin: 0; background: var(--bg); color: var(--ink);
          font: 14px/1.45 -apple-system, "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif; }
   .wrap { max-width: 1100px; margin: 0 auto; padding: 20px 16px 40px; }
@@ -46,19 +47,56 @@
   svg text { fill: var(--muted); font-size: 10px; }
   .err { margin-top: 14px; color: var(--bad); }
   footer { margin-top: 22px; color: var(--muted); font-size: 12px; }
+  /* left menu; collapses to a top tab bar on phones */
+  .layout { display: flex; min-height: 100vh; }
+  .side { flex: 0 0 180px; padding: 22px 12px; border-right: 1px solid var(--line); background: var(--card);
+          position: sticky; top: 0; height: 100vh; }
+  .side .brand { font-weight: 700; font-size: 15px; padding: 0 10px 16px; }
+  .side .brand span { color: var(--accent); }
+  .side a { display: block; padding: 9px 12px; margin-bottom: 4px; border-radius: 8px; color: var(--ink);
+            text-decoration: none; font-weight: 500; }
+  .side a small { display: block; color: var(--muted); font-size: 12px; font-weight: 400; }
+  .side a:hover { background: var(--bg); }
+  .side a.on { background: var(--ink); color: var(--bg); }
+  .side a.on small { color: inherit; opacity: .7; }
+  .layout > main { flex: 1; min-width: 0; }
+  @media (max-width: 700px) {
+    .layout { display: block; }
+    .side { position: sticky; z-index: 2; height: auto; display: flex; gap: 6px; align-items: center;
+            padding: 8px 16px; border-right: 0; border-bottom: 1px solid var(--line); }
+    .side .brand { display: none; }
+    .side a { margin: 0; padding: 6px 14px; }
+    .side a small { display: none; }
+  }
+  /* markets page: CN convention, red = up, green = down */
+  .up { color: var(--accent); } .down { color: var(--good); }
+  .mkt table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  .mkt td { padding: 7px 0; border-top: 1px solid var(--line); vertical-align: top; }
+  .mkt tr:first-child td { border-top: 0; }
+  .mkt td.n { text-align: right; white-space: nowrap; padding-left: 10px; }
+  .mkt .name { font-weight: 600; }
+  .mkt .note { color: var(--muted); font-size: 12px; }
+  .mkt .price { font-size: 16px; font-weight: 600; }
 </style>
 </head>
 <body>
-<div class="wrap">
+<div class="layout">
+<nav class="side">
+  <div class="brand">老汉<span>移动信息网</span></div>
+  <a href="#info" data-page="info">Info<small>服务器状态</small></a>
+  <a href="#markets" data-page="markets">市场行情<small>股指 · 商品 · 汇率</small></a>
+</nav>
+<main class="wrap">
   <header>
-    <h1>老汉的<span>小服务器</span></h1>
-    <div class="meta">
+    <h1>老汉<span>移动信息网</span></h1>
+    <div class="meta" id="meta">
       <span><i class="dot" id="dot"></i><span id="online">连接中…</span></span>
       <span id="model"></span>
       <span>已运行 <b id="uptime">–</b></span>
     </div>
   </header>
 
+  <div id="page-info">
   <div class="grid">
     <section class="card">
       <h2>电池</h2>
@@ -125,6 +163,14 @@
 
   <div class="err" id="err" hidden></div>
   <footer id="foot">每 5 秒刷新 · 趋势每分钟记录一次</footer>
+  </div>
+
+  <div id="page-markets" hidden>
+    <div class="grid mkt" id="mkt"><section class="card"><h2>行情</h2><div class="sub">加载中…</div></section></div>
+    <div class="err" id="mkterr" hidden></div>
+    <footer id="mktfoot">数据来自新浪财经 · 每 30 秒刷新 · 红涨绿跌</footer>
+  </div>
+</main>
 </div>
 
 <script>
@@ -220,8 +266,35 @@ async function history() {
     chart($('chtemp'), h, 'temp', 20, 80, null, '°', 'var(--accent)');
   } catch (e) {}
 }
-tick(); history();
-setInterval(tick, 5000); setInterval(history, 60000);
+const fmtNum = v => v == null ? '–' : v.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: Math.abs(v) < 10 ? 4 : 2});
+async function markets() {
+  try {
+    const m = await (await fetch('/api/markets', {cache: 'no-store'})).json();
+    if (m.groups.length) $('mkt').innerHTML = m.groups.filter(g => g.items.length).map(g => `<section class="card"><h2>${g.title}</h2><table>${
+      g.items.map(q => { const c = q.chg > 0 ? 'up' : q.chg < 0 ? 'down' : '', sg = q.chg > 0 ? '+' : '';
+        return `<tr><td><div class="name">${q.name}</div><div class="note">${q.unit ? q.unit + ' · ' : ''}${q.time}</div></td>
+          <td class="n"><div class="price ${c}">${fmtNum(q.price)}</div>
+          <div class="note ${c}">${sg}${fmtNum(q.chg)} · ${sg}${q.pct.toFixed(2)}%</div></td></tr>`; }).join('')}</table></section>`).join('');
+    $('mkterr').hidden = !m.error;
+    if (m.error) $('mkterr').textContent = '行情更新失败，显示的是上次数据：' + m.error;
+    $('mktfoot').textContent = `数据来自新浪财经 · 每 30 秒刷新 · 红涨绿跌 · 更新于 ${new Date(m.time*1000).toLocaleTimeString('zh-CN')}`;
+  } catch (e) {
+    $('mkterr').hidden = false; $('mkterr').textContent = '行情加载失败';
+  }
+}
+
+// only poll what is on screen: the phone is a single 800 MHz core
+let timers = [];
+function show() {
+  const page = ['#markets', '#others'].includes(location.hash) ? 'markets' : 'info';
+  document.querySelectorAll('.side a').forEach(a => a.classList.toggle('on', a.dataset.page === page));
+  $('page-info').hidden = $('meta').hidden = page !== 'info'; $('page-markets').hidden = page !== 'markets';
+  timers.forEach(clearInterval);
+  if (page === 'info') { tick(); history(); timers = [setInterval(tick, 5000), setInterval(history, 60000)]; }
+  else { markets(); timers = [setInterval(markets, 30000)]; }
+}
+window.addEventListener('hashchange', show);
+show();
 </script>
 </body>
 </html>

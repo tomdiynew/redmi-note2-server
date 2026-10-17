@@ -4,17 +4,20 @@
 GET /             dashboard page
 GET /api/status   current readings (JSON)
 GET /api/history  last 24h of 1-minute samples (JSON)
+GET /api/markets  index / commodity quotes from Sina, cached 30s (JSON)
 
 Root-only data (Wi-Fi SSID, IP, charge control) comes from ~/.phonestat.json,
 written every 15s by the phonectl root service.
 """
 import json
 import os
+import re
 import subprocess
 import threading
 import time
 from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.request import Request, urlopen
 
 PORT = int(os.environ.get("WEBSTAT_PORT", "8080"))
 HOME = os.path.expanduser("~")
@@ -125,6 +128,84 @@ STATIC = {"model": getprop("ro.product.model"), "android": getprop("ro.build.ver
           "kernel": os.uname().release, "arch": os.uname().machine}
 
 
+# (group, [(sina code, unit)]); Sina supplies the Chinese names
+MARKETS = [
+    ("美股", [("gb_$dji", ""), ("gb_$inx", ""), ("gb_$ixic", "")]),
+    ("A 股", [("sh000001", ""), ("sz399001", ""), ("sz399006", ""), ("sh000300", "")]),
+    ("港股", [("hkHSI", ""), ("hkHSTECH", ""), ("hkHSCEI", "")]),
+    ("贵金属", [("hf_GC", "美元/盎司"), ("hf_SI", "美元/盎司")]),
+    ("能源", [("hf_CL", "美元/桶"), ("hf_OIL", "美元/桶"), ("hf_NG", "美元/百万英热")]),
+    ("农产品", [("hf_C", "美分/蒲式耳"), ("hf_S", "美分/蒲式耳"), ("hf_W", "美分/蒲式耳")]),
+    ("汇率", [("fx_susdcny", "")]),
+]
+MARKET_TTL = 30
+_markets = {"ts": 0, "data": None}
+_markets_lock = threading.Lock()
+
+
+def _f(x):
+    try:
+        return float(x)
+    except (TypeError, ValueError):
+        return None
+
+
+def parse_sina(code, f):
+    """-> (name, price, prev, high, low, quote time) or None. Field layouts differ per market."""
+    try:
+        if code.startswith("gb_"):
+            return f[0], _f(f[1]), _f(f[26]), _f(f[6]), _f(f[7]), f[3][5:16]
+        if code.startswith(("sh", "sz")):
+            price = _f(f[3]) or _f(f[2])  # 0 before the open
+            return f[0], price, _f(f[2]), _f(f[4]), _f(f[5]), f[30][5:] + " " + f[31][:5]
+        if code.startswith("hk"):
+            return f[1], _f(f[6]), _f(f[3]), _f(f[4]), _f(f[5]), f[17][5:].replace("/", "-") + " " + f[18]
+        if code.startswith("hf_"):
+            return f[13], _f(f[0]), _f(f[7]), _f(f[4]), _f(f[5]), f[12][5:] + " " + f[6][:5]
+        if code.startswith("fx_"):
+            return "美元/人民币", _f(f[8]), _f(f[3]), _f(f[6]), _f(f[7]), f[17][5:] + " " + f[0][:5]
+    except IndexError:
+        pass
+    return None
+
+
+def fetch_markets():
+    codes = [c for _, items in MARKETS for c, _ in items]
+    req = Request("https://hq.sinajs.cn/list=" + ",".join(codes),
+                  headers={"Referer": "https://finance.sina.com.cn", "User-Agent": "Mozilla/5.0"})
+    with urlopen(req, timeout=8) as r:
+        raw = r.read().decode("gbk", "replace")
+    quotes = {m.group(1): parse_sina(m.group(1), m.group(2).split(","))
+              for m in re.finditer(r'hq_str_([^=]+)="([^"]*)"', raw)}
+    groups = []
+    for title, items in MARKETS:
+        rows = []
+        for code, unit in items:
+            q = quotes.get(code)
+            if not q or q[1] is None:
+                continue
+            name, price, prev, high, low, qt = q
+            chg = price - prev if prev else None
+            rows.append({"code": code, "name": name, "price": price, "prev": prev, "high": high, "low": low,
+                         "chg": chg, "pct": chg / prev * 100 if chg is not None else None,
+                         "unit": unit, "time": qt})
+        groups.append({"title": title, "items": rows})
+    return groups
+
+
+def markets():
+    """Shared 30s cache: every viewer polling Sina would swamp the single core."""
+    with _markets_lock:
+        if time.time() - _markets["ts"] > MARKET_TTL:
+            try:
+                _markets["data"] = fetch_markets()
+                _markets["error"] = None
+            except Exception as e:  # keep serving the last good quotes
+                _markets["error"] = str(e)
+            _markets["ts"] = time.time()
+        return {"time": int(_markets["ts"]), "groups": _markets["data"] or [], "error": _markets.get("error")}
+
+
 def status():
     up = float(read("/proc/uptime", "0").split()[0])
     mem = {}
@@ -220,6 +301,8 @@ class Handler(BaseHTTPRequestHandler):
             with sampler.lock:
                 data = list(sampler.history)
             self._send(200, json.dumps(data).encode(), "application/json")
+        elif path == "/api/markets":
+            self._send(200, json.dumps(markets(), ensure_ascii=False).encode(), "application/json; charset=utf-8")
         elif path in ("/", "/index.html"):
             with open(os.path.join(HERE, "index.html"), "rb") as f:
                 self._send(200, f.read(), "text/html; charset=utf-8")
