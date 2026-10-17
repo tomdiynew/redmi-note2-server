@@ -1,0 +1,7 @@
+# large / regenerable / third-party binaries stay out of git
+*.img
+*.zip
+*.apk
+*.raw
+.DS_Store
+__pycache__/

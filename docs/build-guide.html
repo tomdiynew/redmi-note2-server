@@ -71,6 +71,9 @@
   .flow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 14px 0; }
   .flow span { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-size: 13.5px; }
   .flow i { color: var(--muted); font-style: normal; }
+  figure { margin: 14px 0; } figure img { max-width: 100%; border-radius: 10px; border: 1px solid var(--line); display: block; }
+  figure figcaption { color: var(--muted); font-size: 13px; margin-top: 6px; }
+  .shots { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); }
   footer { margin-top: 60px; color: var(--muted); font-size: 13px; border-top: 1px solid var(--line); padding-top: 16px; }
   @media (max-width: 960px) {
     .layout { grid-template-columns: 1fr; }
@@ -127,6 +130,13 @@
   <tr><td>开机界面</td><td>自定义第一屏、带进度条和背景音乐的开机动画、开机后 Termux 自动演示</td></tr>
   <tr><td>自愈</td><td>SSH 和网页服务由系统 init 守护，挂了 30 秒内自动拉起，开机自动启动</td></tr>
 </table></div>
+
+<figure><img src="img/dashboard-desktop.jpg" alt="状态网页"><figcaption>局域网状态网页（电脑浏览器）</figcaption></figure>
+<div class="shots">
+  <figure><img src="img/redmi-bootanim.jpg" alt="开机动画"><figcaption>开机动画（真机截图）</figcaption></figure>
+  <figure><img src="img/redmi-boot-intro.jpg" alt="开机演示"><figcaption>开机后 Termux 演示的最后画面</figcaption></figure>
+  <figure><img src="img/dashboard-mobile.jpg" alt="手机上的状态网页"><figcaption>状态网页（窄屏）</figcaption></figure>
+</div>
 
 <h3>整体流程</h3>
 <div class="flow">
@@ -456,7 +466,7 @@ cat /sys/class/power_supply/battery/capacity     <span class="c"># 当前电量�
 <span class="where mac">MAC</span>
 <pre><code>cd ~/ai_claude/redmi-note2-server
 B=/Volumes/SSD1G/download/redmi-note2-flash
-python3 tools/build_logo.py $B/backup-miui9-20261017/logo.img 我的图片.png logo-new.img --colors 64</code></pre>
+python3 tools/build_logo.py $B/backup-miui9-20261017/logo.img assets/images/boot-logo-v2-android.png logo-new.img --colors 64</code></pre>
 <ul class="explain">
   <li>第 1 个参数：原厂 logo 备份，用来提供其余 37 张图和分区头。</li>
   <li><code>--colors 64</code>：把图片减到 64 色来压缩体积。黑底文字类的图 12 色就够了；带光晕渐变的图用 64 色，避免出现一圈圈色带。</li>
@@ -491,7 +501,7 @@ p 0 0 part1      <span class="c"># p = 系统一就绪就可以中断；0 = 无�
   <li><b><code>c</code> 是关键</b>：即使系统已经准备好，也要等 part0 完整播放完才进入桌面，所以声音不会被截断。</li>
 </ul>
 <span class="where mac">MAC</span>
-<pre><code>tools/build_bootanim.sh 我的图片.png bootanimation.zip 开机声音.mp3</code></pre>
+<pre><code>tools/build_bootanim.sh assets/images/bootanim-v2-portrait.png bootanimation.zip assets/audio/phone_boot.mp3</code></pre>
 <span class="where adb">ADB</span>
 <pre><code>adb root
 adb shell 'mount -o rw,remount /system'
@@ -588,10 +598,11 @@ done
 <h2 id="paths"><span class="no">17</span>文件位置</h2>
 <div class="table-wrap"><table>
   <tr><th>内容</th><th>位置</th></tr>
-  <tr><td>工程（git）</td><td><code>~/ai_claude/redmi-note2-server/</code></td></tr>
+  <tr><td>工程（GitHub 私有仓库）</td><td><code>~/ai_claude/redmi-note2-server/</code></td></tr>
   <tr><td>系统服务</td><td><code>system/phonectl.*</code>、<code>system/termux-services.*</code>、<code>system/termux-intro.*</code></td></tr>
   <tr><td>网页服务</td><td><code>termux/webstat/server.py</code>、<code>index.html</code></td></tr>
   <tr><td>开机演示 / Termux 设置</td><td><code>termux/bin/boot-intro</code>、<code>termux/dot-termux/termux.properties</code></td></tr>
+  <tr><td>素材：开机图片、开机音乐</td><td><code>assets/images/</code>（两版第一屏、两版开机动画）、<code>assets/audio/phone_boot.mp3</code></td></tr>
   <tr><td>开机画面工具</td><td><code>tools/build_logo.py</code>、<code>tools/build_bootanim.sh</code></td></tr>
   <tr><td>部署脚本</td><td><code>deploy.sh</code></td></tr>
   <tr><td>刷机包、TWRP、APK</td><td><code>/Volumes/SSD1G/download/redmi-note2-flash/</code></td></tr>

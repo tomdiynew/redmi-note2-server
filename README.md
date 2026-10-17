@@ -21,6 +21,14 @@ docs/build-guide.html  full flashing + setup guide
 deploy.sh              system | web | all | status
 ```
 
+## Assets
+
+- `assets/images/`: the user's boot pictures. These are `boot-logo-v1-wodiao.png` and `boot-logo-v2-android.png` (first boot screen → `tools/build_logo.py`), plus `bootanim-v1-laohan.png` and `bootanim-v2-portrait.png` (boot animation → `tools/build_bootanim.sh`).
+- `assets/audio/phone_boot.mp3`: the boot sound, an 11 s clip cut in Audacity.
+- `docs/img/`: real-device screenshots used by the guide.
+
+Not in git: ROM/TWRP/APK downloads (third-party, too large), the stock MIUI partition backup (2.2 GB, contains device-specific nvram/IMEI data), and generated `bootanimation.zip` / `logo-new.img`. All of these live on `/Volumes/SSD1G/download/redmi-note2-flash/`, and the generated files can be rebuilt from `assets/` with the tools.
+
 ## Deploy
 
 ```bash
