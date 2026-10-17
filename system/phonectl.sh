@@ -9,8 +9,8 @@
 # /proc/mtk_battery_cmd/current_cmd stops charging, "0 0" resumes it.
 # NEVER read that file: its read handler forces discharging.
 
-CHARGE_LOW=50
-CHARGE_HIGH=60
+CHARGE_LOW=40
+CHARGE_HIGH=70
 INTERVAL=15
 OUT=/data/data/com.termux/files/home/.phonestat.json
 [ -f /data/local/phonectl.conf ] && . /data/local/phonectl.conf
