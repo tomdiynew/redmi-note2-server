@@ -56,3 +56,9 @@ To change the charge window, create `/data/local/phonectl.conf` on the phone (fo
 - Normally only 1 of the 8 cores is online (MTK hotplug).
 - SELinux is permissive, which is why `phonectl` can run without its own SELinux domain.
 - To reach TWRP, hold Vol Up during a reboot. MIUI-era notes and the full partition backup are in `/Volumes/SSD1G/download/redmi-note2-flash/`.
+
+## License & credits
+
+Code, docs, boot pictures and the boot sound (an original recording) are MIT-licensed. See [LICENSE](LICENSE).
+
+`assets/images/boot-logo-v2-android.png` contains the Android robot. The Android robot is reproduced or modified from work created and shared by Google and used according to terms described in the [Creative Commons 3.0 Attribution License](https://creativecommons.org/licenses/by/3.0/).
