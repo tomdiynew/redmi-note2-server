@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>老汉的小服务器</title>
+<style>
+  :root {
+    --bg: #f4f4f1; --card: #ffffff; --ink: #1d1d1b; --muted: #77756f; --line: #e3e1db;
+    --accent: #d7261e; --good: #1f8a4c; --warn: #c27a00; --bad: #d7261e; --band: rgba(31,138,76,.14);
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0d0d0d; --card: #171717; --ink: #f2f0ea; --muted: #8f8c85; --line: #2a2a28;
+            --accent: #ff3b30; --good: #3ccf7a; --warn: #f0a530; --bad: #ff453a; --band: rgba(60,207,122,.16);
+            color-scheme: dark; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 14px/1.45 -apple-system, "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 20px 16px 40px; }
+  header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; margin-bottom: 18px; }
+  h1 { font-size: 22px; margin: 0; letter-spacing: .5px; }
+  h1 span { color: var(--accent); }
+  .meta { color: var(--muted); font-size: 13px; display: flex; gap: 14px; flex-wrap: wrap; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--good); margin-right: 6px; }
+  .dot.off { background: var(--bad); }
+  .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(min(250px, 100%), 1fr)); }
+  .card { min-width: 0; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+  .card h2 { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase;
+             letter-spacing: 1px; margin: 0 0 10px; }
+  .big { font-size: 34px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .big small { font-size: 15px; font-weight: 500; color: var(--muted); margin-left: 4px; }
+  .sub { color: var(--muted); margin-top: 2px; }
+  dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 12px 0 0; }
+  dt { color: var(--muted); }
+  dd { margin: 0; min-width: 0; text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  .bar { position: relative; height: 10px; border-radius: 5px; background: var(--line); margin-top: 12px; overflow: hidden; }
+  .bar > i { position: absolute; inset: 0 auto 0 0; border-radius: 5px; background: var(--ink); }
+  .bar > b { position: absolute; top: 0; bottom: 0; background: var(--band); border-left: 1px dashed var(--good); border-right: 1px dashed var(--good); }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600;
+          border: 1px solid currentColor; }
+  .good { color: var(--good); } .warn { color: var(--warn); } .bad { color: var(--bad); }
+  .charts { margin-top: 14px; display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); }
+  svg { width: 100%; height: 160px; display: block; }
+  svg text { fill: var(--muted); font-size: 10px; }
+  .err { margin-top: 14px; color: var(--bad); }
+  footer { margin-top: 22px; color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>老汉的<span>小服务器</span></h1>
+    <div class="meta">
+      <span><i class="dot" id="dot"></i><span id="online">连接中…</span></span>
+      <span id="model"></span>
+      <span>已运行 <b id="uptime">–</b></span>
+    </div>
+  </header>
+
+  <div class="grid">
+    <section class="card">
+      <h2>电池</h2>
+      <div class="big" id="bat">–<small>%</small></div>
+      <div class="sub" id="batstate">–</div>
+      <div class="bar"><b id="band"></b><i id="batbar"></i></div>
+      <dl>
+        <dt>充电控制</dt><dd id="ctl">–</dd>
+        <dt>电压</dt><dd id="volt">–</dd>
+        <dt>电池温度</dt><dd id="btemp">–</dd>
+        <dt>健康</dt><dd id="health">–</dd>
+        <dt>电源</dt><dd id="power">–</dd>
+      </dl>
+    </section>
+
+    <section class="card">
+      <h2>网络</h2>
+      <div class="big" id="ssid" style="font-size:26px">–</div>
+      <div class="sub" id="signal">–</div>
+      <dl>
+        <dt>IP 地址</dt><dd id="ip">–</dd>
+        <dt>网关</dt><dd id="gw">–</dd>
+        <dt>连接速率</dt><dd id="link">–</dd>
+        <dt>下载 / 上传</dt><dd id="rate">–</dd>
+        <dt>累计流量</dt><dd id="total">–</dd>
+      </dl>
+    </section>
+
+    <section class="card">
+      <h2>CPU</h2>
+      <div class="big" id="cpu">–<small>%</small></div>
+      <div class="sub" id="load">–</div>
+      <dl>
+        <dt>在线核心</dt><dd id="cores">–</dd>
+        <dt>频率</dt><dd id="freq">–</dd>
+      </dl>
+      <h2 style="margin-top:16px">温度</h2>
+      <dl id="temps" style="margin-top:0"></dl>
+    </section>
+
+    <section class="card">
+      <h2>内存 / 存储</h2>
+      <div class="big" id="mem">–<small>%</small></div>
+      <div class="sub" id="memtxt">–</div>
+      <div class="bar"><i id="membar"></i></div>
+      <dl>
+        <dt>存储已用</dt><dd id="disk">–</dd>
+      </dl>
+      <div class="bar"><i id="diskbar"></i></div>
+      <h2 style="margin-top:16px">系统</h2>
+      <dl style="margin-top:0">
+        <dt>Android</dt><dd id="android">–</dd>
+        <dt>ROM</dt><dd id="rom">–</dd>
+        <dt>内核</dt><dd id="kernel">–</dd>
+        <dt>运营商</dt><dd id="cell">–</dd>
+      </dl>
+    </section>
+  </div>
+
+  <div class="charts">
+    <section class="card"><h2>电量 · 24 小时</h2><svg id="chbat" viewBox="0 0 600 160" preserveAspectRatio="none"></svg></section>
+    <section class="card"><h2>CPU 温度 · 24 小时</h2><svg id="chtemp" viewBox="0 0 600 160" preserveAspectRatio="none"></svg></section>
+  </div>
+
+  <div class="err" id="err" hidden></div>
+  <footer>每 5 秒刷新 · 趋势每分钟记录一次 · Redmi Note 2 / LineageOS 14.1 / Termux</footer>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const fmtBytes = b => b == null ? '–' : b < 1024 ? b + ' B' : b < 1048576 ? (b/1024).toFixed(1) + ' KB'
+  : b < 1073741824 ? (b/1048576).toFixed(1) + ' MB' : (b/1073741824).toFixed(2) + ' GB';
+const fmtRate = b => fmtBytes(b) + '/s';
+const fmtUp = s => { const d = Math.floor(s/86400), h = Math.floor(s%86400/3600), m = Math.floor(s%3600/60);
+  return (d ? d + '天 ' : '') + (h ? h + '小时 ' : '') + m + '分'; };
+const STATUS = { 'Charging': '充电中', 'Full': '已充满', 'Discharging': '使用电池',
+  'Not charging': '暂停充电', 'Cmd discharging': '暂停充电（使用电池）' };
+
+function signal(rssi) {
+  if (rssi == null) return ['–', ''];
+  const q = rssi >= -55 ? ['很强', 'good'] : rssi >= -67 ? ['良好', 'good'] : rssi >= -75 ? ['一般', 'warn'] : ['弱', 'bad'];
+  return [`信号${q[0]} · ${rssi} dBm`, q[1]];
+}
+
+function render(s) {
+  const b = s.battery, r = s.root || {}, ctl = r.charge_ctl, w = r.wifi || {};
+  $('dot').className = 'dot'; $('online').textContent = '在线 · ' + new Date(s.time*1000).toLocaleTimeString('zh-CN');
+  $('model').textContent = s.device.model; $('uptime').textContent = fmtUp(s.uptime_s);
+
+  $('bat').innerHTML = `${Math.round(b.level)}<small>%</small>`;
+  $('batstate').textContent = STATUS[b.status] || b.status;
+  $('batbar').style.width = b.level + '%';
+  $('batbar').style.background = b.level < 20 ? 'var(--bad)' : 'var(--ink)';
+  if (ctl) {
+    $('band').style.left = ctl.low + '%'; $('band').style.width = (ctl.high - ctl.low) + '%';
+    $('ctl').innerHTML = `<span class="pill ${ctl.charging === 'on' ? 'good' : 'warn'}">${ctl.charging === 'on' ? '允许充电' : '已暂停'}</span> 目标 ${ctl.low}–${ctl.high}%`;
+  } else $('ctl').textContent = '未运行';
+  $('volt').textContent = b.voltage_mv ? (b.voltage_mv/1000).toFixed(2) + ' V' : '–';
+  $('btemp').textContent = b.temp_c != null ? b.temp_c.toFixed(1) + ' °C' : '–';
+  $('health').textContent = b.health === 'Good' ? '良好' : b.health || '–';
+  $('power').textContent = b.usb ? 'USB 已连接' : b.ac ? '充电器已连接' : '未接电源';
+
+  $('ssid').textContent = w.ssid || '未连接';
+  const [sig, cls] = signal(w.rssi); $('signal').textContent = sig; $('signal').className = 'sub ' + cls;
+  $('ip').textContent = w.ip || '–'; $('gw').textContent = w.gateway || '–';
+  $('link').textContent = w.link_mbps ? `${w.link_mbps} Mbps · ${w.freq_mhz > 4000 ? '5' : '2.4'} GHz` : '–';
+  $('rate').innerHTML = `↓ ${fmtRate(s.network.rx_bps)}<br>↑ ${fmtRate(s.network.tx_bps)}`;
+  $('total').innerHTML = `↓ ${fmtBytes(s.network.rx_total)}<br>↑ ${fmtBytes(s.network.tx_total)}`;
+
+  $('cpu').innerHTML = `${Math.round(s.cpu.usage_pct)}<small>%</small>`;
+  $('load').textContent = '负载 ' + s.cpu.load.map(x => x.toFixed(1)).join(' / ') + '（MTK 内核偏高，仅供参考）';
+  $('cores').textContent = `${s.cpu.cores_online} / ${s.cpu.cores_total}`;
+  const f = Object.values(s.cpu.freq_mhz); $('freq').textContent = f.length ? Math.max(...f) + ' MHz' : '–';
+  $('temps').innerHTML = Object.entries(s.temps).map(([k, v]) =>
+    `<dt>${k}</dt><dd class="${v >= 70 ? 'bad' : v >= 55 ? 'warn' : ''}">${v.toFixed(1)} °C</dd>`).join('');
+
+  const mu = 1 - s.memory.available / s.memory.total, du = 1 - s.storage.free / s.storage.total;
+  $('mem').innerHTML = `${Math.round(mu*100)}<small>%</small>`;
+  $('memtxt').textContent = `可用 ${fmtBytes(s.memory.available)} / 共 ${fmtBytes(s.memory.total)}`;
+  $('membar').style.width = mu*100 + '%';
+  $('disk').textContent = `${fmtBytes(s.storage.total - s.storage.free)} / ${fmtBytes(s.storage.total)}`;
+  $('diskbar').style.width = du*100 + '%';
+  $('android').textContent = s.device.android; $('rom').textContent = s.device.rom;
+  $('kernel').textContent = s.device.kernel; const sims = ((r.cell && r.cell.sim) || '').split(',');
+  $('cell').textContent = (r.cell && r.cell.operator) || (sims[0] === 'READY' ? '卡1 已就绪（无信号）' : '无 SIM');
+  $('err').hidden = !(r.age_s > 120);
+  if (r.age_s > 120) $('err').textContent = `root 服务数据已 ${r.age_s} 秒未更新`;
+}
+
+function chart(svg, pts, key, lo, hi, band, unit, color) {
+  const W = 600, H = 160, P = 22, now = Date.now()/1000, t0 = now - 86400;
+  const x = t => P + (t - t0) / 86400 * (W - P - 4), y = v => H - 16 - (v - lo) / (hi - lo) * (H - 28);
+  let g = '';
+  if (band) g += `<rect x="${P}" width="${W-P-4}" y="${y(band[1])}" height="${y(band[0])-y(band[1])}" fill="var(--band)"/>`;
+  [lo, (lo+hi)/2, hi].forEach(v => g += `<text x="0" y="${y(v)+3}">${v}${unit}</text>
+    <line x1="${P}" x2="${W-4}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)" stroke-width="1"/>`);
+  [-24, -18, -12, -6, 0].forEach(h => g += `<text x="${x(now + h*3600) - 8}" y="${H-2}">${h ? h + 'h' : '现在'}</text>`);
+  const seg = pts.filter(p => p[key] != null && p.t >= t0).map(p => `${x(p.t).toFixed(1)},${y(Math.min(hi, Math.max(lo, p[key]))).toFixed(1)}`);
+  if (seg.length > 1) g += `<polyline points="${seg.join(' ')}" fill="none" stroke="${color}" stroke-width="2" vector-effect="non-scaling-stroke"/>`;
+  else g += `<text x="${W/2 - 40}" y="${H/2}">数据收集中…</text>`;
+  svg.innerHTML = g;
+}
+
+let ctlBand = [50, 60];
+async function tick() {
+  try {
+    const s = await (await fetch('/api/status', {cache: 'no-store'})).json();
+    render(s);
+    if (s.root && s.root.charge_ctl) ctlBand = [s.root.charge_ctl.low, s.root.charge_ctl.high];
+  } catch (e) {
+    $('dot').className = 'dot off'; $('online').textContent = '离线';
+  }
+}
+async function history() {
+  try {
+    const h = await (await fetch('/api/history', {cache: 'no-store'})).json();
+    chart($('chbat'), h, 'bat', 0, 100, ctlBand, '%', 'var(--good)');
+    chart($('chtemp'), h, 'temp', 20, 80, null, '°', 'var(--accent)');
+  } catch (e) {}
+}
+tick(); history();
+setInterval(tick, 5000); setInterval(history, 60000);
+</script>
+</body>
+</html>

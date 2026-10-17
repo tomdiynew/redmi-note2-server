@@ -1,0 +1,4 @@
+service phonectl /system/bin/sh /system/bin/phonectl.sh
+    class late_start
+    user root
+    group root

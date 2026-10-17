@@ -1,0 +1,5 @@
+#!/data/data/com.termux/files/usr/bin/sh
+# Run by Termux:Boot at device boot.
+termux-wake-lock
+sshd
+~/webstat/restart.sh
