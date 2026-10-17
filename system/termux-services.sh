@@ -16,7 +16,8 @@ cd $HOME
 echo termux-services > /sys/power/wake_lock 2>/dev/null
 
 while true; do
-  pgrep -x sshd >/dev/null || $PREFIX/bin/sshd
+  # match the full path: on this kernel the process name is a truncated path, so -x sshd never matches
+  pgrep -f "^$PREFIX/bin/sshd" >/dev/null || $PREFIX/bin/sshd
   if ! pgrep -f "python3 .*webstat/server.py" >/dev/null; then
     $PREFIX/bin/python3 $HOME/webstat/server.py >> $HOME/webstat.log 2>&1 &
   fi

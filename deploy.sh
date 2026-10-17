@@ -31,9 +31,9 @@ web() {
   "${SSH[@]}" 'mkdir -p ~/webstat ~/.termux/boot'
   scp -q -P 8022 termux/webstat/server.py termux/webstat/index.html "$PHONE":webstat/
   "${SSH[@]}" 'mkdir -p ~/bin ~/.termux'
-  scp -q -P 8022 termux/bin/rain.py termux/bin/boot-intro "$PHONE":bin/
+  scp -q -P 8022 termux/bin/boot-intro "$PHONE":bin/
   scp -q -P 8022 termux/dot-termux/termux.properties "$PHONE":.termux/termux.properties
-  "${SSH[@]}" 'chmod 700 ~/bin/rain.py ~/bin/boot-intro'
+  "${SSH[@]}" 'chmod 700 ~/bin/boot-intro; rm -f ~/bin/rain.py'
   "${SSH[@]}" 'chmod 700 ~/webstat/server.py; rm -f ~/.termux/boot/start-sshd ~/.termux/boot/start-services ~/webstat/restart.sh'
   "${SSH[@]}" 'pkill -f "python3 .*webstat/[s]erver.py"; echo "webstat restarting (termux-services supervisor relaunches it within 30s)"'
 }

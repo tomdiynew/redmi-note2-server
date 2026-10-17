@@ -40,8 +40,9 @@ while true; do
   elif [ "$charging" = off ] && [ "$cap" -le "$CHARGE_LOW" ]; then set_charging on
   fi
 
-  # Wi-Fi details are expensive (dumpsys); refresh every 4th loop
-  if [ $((n % 4)) -eq 0 ]; then
+  # Wi-Fi details are expensive (dumpsys): refresh every 4th loop, but every
+  # loop until an SSID shows up (right after boot Wi-Fi is still connecting)
+  if [ $((n % 4)) -eq 0 ] || [ -z "$ssid" ]; then
     wi=$(dumpsys wifi 2>/dev/null | grep -m1 'mWifiInfo')
     ssid=$(echo "$wi" | sed -n 's/.*mWifiInfo SSID: \([^,]*\),.*/\1/p')
     rssi=$(echo "$wi" | sed -n 's/.*RSSI: \(-\{0,1\}[0-9]*\).*/\1/p')
