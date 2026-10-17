@@ -1,0 +1,5 @@
+service termux-services /system/bin/sh /system/bin/termux-services.sh
+    class late_start
+    # numeric: Android 7 init cannot resolve app user names like u0_a63
+    user 10063
+    group 10063 inet wakelock

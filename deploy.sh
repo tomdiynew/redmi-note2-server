@@ -15,19 +15,21 @@ system() {
   adb shell 'mount -o rw,remount /system'
   adb push system/phonectl.sh /system/bin/phonectl.sh
   adb push system/phonectl.rc /system/etc/init/phonectl.rc
-  adb shell 'chmod 755 /system/bin/phonectl.sh; chmod 644 /system/etc/init/phonectl.rc
-    chown root:root /system/bin/phonectl.sh /system/etc/init/phonectl.rc
-    restorecon /system/bin/phonectl.sh /system/etc/init/phonectl.rc 2>/dev/null
+  adb push system/termux-services.sh /system/bin/termux-services.sh
+  adb push system/termux-services.rc /system/etc/init/termux-services.rc
+  adb shell 'cd /system; chmod 755 bin/phonectl.sh bin/termux-services.sh
+    chmod 644 etc/init/phonectl.rc etc/init/termux-services.rc
+    chown root:root bin/phonectl.sh bin/termux-services.sh etc/init/phonectl.rc etc/init/termux-services.rc
+    restorecon bin/phonectl.sh bin/termux-services.sh etc/init/phonectl.rc etc/init/termux-services.rc 2>/dev/null
     mount -o ro,remount /system; sync'
-  echo "phonectl installed; it starts at next boot (or: adb shell start phonectl)"
+  echo "installed; init services load at next boot"
 }
 
 web() {
   "${SSH[@]}" 'mkdir -p ~/webstat ~/.termux/boot'
-  scp -q -P 8022 termux/webstat/server.py termux/webstat/index.html termux/webstat/restart.sh "$PHONE":webstat/
-  scp -q -P 8022 termux/boot/start-services "$PHONE":.termux/boot/start-services
-  "${SSH[@]}" 'chmod 700 ~/.termux/boot/start-services ~/webstat/server.py ~/webstat/restart.sh; rm -f ~/.termux/boot/start-sshd'
-  "${SSH[@]}" '~/webstat/restart.sh'
+  scp -q -P 8022 termux/webstat/server.py termux/webstat/index.html "$PHONE":webstat/
+  "${SSH[@]}" 'chmod 700 ~/webstat/server.py; rm -f ~/.termux/boot/start-sshd ~/.termux/boot/start-services ~/webstat/restart.sh'
+  "${SSH[@]}" 'pkill -f "python3 .*webstat/[s]erver.py"; echo "webstat restarting (termux-services supervisor relaunches it within 30s)"'
 }
 
 case "${1:-}" in

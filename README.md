@@ -12,7 +12,7 @@ An old Redmi Note 2 (hermes, MT6795) running as an always-on LAN mini server. It
 system/phonectl.sh     root service: charge limiter + root-only info -> ~/.phonestat.json
 system/phonectl.rc     init service definition (/system/etc/init)
 termux/webstat/        dashboard (Python stdlib server + one HTML page)
-termux/boot/           Termux:Boot script: wake-lock, sshd, dashboard
+system/termux-services* init-supervised sshd + dashboard (as the Termux uid), survives app kills
 deploy.sh              system | web | all | status
 ```
 
