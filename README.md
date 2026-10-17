@@ -6,6 +6,16 @@ An old Redmi Note 2 (hermes, MT6795) running as an always-on LAN mini server. It
 - **Charge limiter**: keeps the battery between 50% and 60% so that being plugged in all the time doesn't wear out or swell the 2015 battery.
 - **SSH**: `ssh -p 8022 192.168.43.247` (Termux, key auth).
 
+## Screenshots
+
+| Status dashboard | Boot animation | Boot intro (Termux) |
+|---|---|---|
+| <img src="docs/img/dashboard-desktop.jpg" width="320"> | <img src="docs/img/redmi-bootanim.jpg" width="180"> | <img src="docs/img/redmi-boot-intro.jpg" width="180"> |
+
+Dashboard on a phone: <img src="docs/img/dashboard-mobile.jpg" width="160">
+
+**Boot sound:** [assets/audio/phone_boot.mp3](assets/audio/phone_boot.mp3) (11 s, plays with the progress bar during the boot animation)
+
 **Full step-by-step guide (Chinese, commands explained):** [docs/build-guide.html](docs/build-guide.html)
 
 ## Layout
