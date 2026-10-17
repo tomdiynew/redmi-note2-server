@@ -1,0 +1,8 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# Foreground Termux session opened at boot by /system/bin/termux-intro.sh:
+# 4 s of digital rain, a short banner, then an interactive shell.
+python3 ~/bin/rain.py 4
+ip=$(python3 -c "import socket;s=socket.socket(2,2);s.connect(('223.5.5.5',53));print(s.getsockname()[0])" 2>/dev/null)
+printf '\033[1;32m  青岛老汉的小服务器\033[0m\n'
+printf '\033[32m  %s  ·  ssh -p 8022 %s  ·  http://%s:8080\033[0m\n\n' "$(date '+%F %T')" "${ip:-?}" "${ip:-?}"
+exec bash -l

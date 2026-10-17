@@ -1,0 +1,7 @@
+service termux-intro /system/bin/sh /system/bin/termux-intro.sh
+    user root
+    oneshot
+    disabled
+
+on property:sys.boot_completed=1
+    start termux-intro
