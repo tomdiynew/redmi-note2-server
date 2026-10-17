@@ -1,0 +1,14 @@
+# Copy to termux/frpc/frpc.toml (gitignored) and fill in the token.
+# Same frps on the VPS as the Mac's tunnels (8080-8082, 6022 are taken there).
+serverAddr = "65.20.101.89"
+serverPort = 7000
+
+auth.method = "token"
+auth.token = "CHANGE_ME"
+
+[[proxies]]
+name = "redmi-webstat"
+type = "tcp"
+localIP = "127.0.0.1"
+localPort = 8080
+remotePort = 8083

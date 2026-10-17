@@ -21,5 +21,9 @@ while true; do
   if ! pgrep -f "python3 .*webstat/server.py" >/dev/null; then
     $PREFIX/bin/python3 $HOME/webstat/server.py >> $HOME/webstat.log 2>&1 &
   fi
+  # frp tunnel to the VPS (http://65.20.101.89:8083 -> dashboard); config from ./deploy.sh web
+  if [ -f $HOME/.frpc.toml ] && ! pgrep -f "^$PREFIX/bin/frpc" >/dev/null; then
+    $PREFIX/bin/frpc -c $HOME/.frpc.toml >> $HOME/frpc.log 2>&1 &
+  fi
   sleep 30
 done

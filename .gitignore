@@ -5,3 +5,4 @@
 *.raw
 .DS_Store
 __pycache__/
+termux/frpc/frpc.toml
