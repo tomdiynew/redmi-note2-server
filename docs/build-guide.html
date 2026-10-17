@@ -1,0 +1,608 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>红米 Note 2 小服务器 · 刷机与搭建全记录</title>
+<style>
+  :root {
+    --bg: #fbfaf7; --paper: #ffffff; --ink: #1c1b19; --muted: #6f6c66; --line: #e6e3dc;
+    --accent: #c8231b; --ok: #1d7f47; --warn-bg: #fff6e5; --warn-line: #e8a33b;
+    --tip-bg: #eef7f1; --tip-line: #3a9a63; --code-bg: #16181d; --code-ink: #e6e6e6;
+    --code-cm: #7f8896; --kbd: #f0eee9; color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #111110; --paper: #191917; --ink: #ecebe6; --muted: #9a978f; --line: #2c2b28;
+      --accent: #ff4d40; --ok: #42c97c; --warn-bg: #2a2214; --warn-line: #c98a2a;
+      --tip-bg: #14251b; --tip-line: #2f8a55; --code-bg: #0b0c0f; --kbd: #26251f; color-scheme: dark; }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.7 -apple-system, "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif; }
+  .layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); max-width: 1240px; margin: 0 auto; }
+  nav { position: sticky; top: 0; align-self: start; max-height: 100vh; overflow-y: auto;
+    padding: 28px 18px 28px 24px; border-right: 1px solid var(--line); font-size: 13.5px; }
+  nav .brand { font-weight: 700; font-size: 15px; margin-bottom: 14px; }
+  nav .brand span { color: var(--accent); }
+  nav ol { list-style: none; padding: 0; margin: 0; counter-reset: s; }
+  nav li { margin: 3px 0; }
+  nav a { color: var(--muted); text-decoration: none; display: block; padding: 3px 8px; border-radius: 6px; }
+  nav a:hover { background: var(--line); color: var(--ink); }
+  main { padding: 36px 48px 80px; min-width: 0; }
+  header.hero { border-bottom: 1px solid var(--line); padding-bottom: 22px; margin-bottom: 10px; }
+  h1 { font-size: 30px; line-height: 1.25; margin: 0 0 8px; }
+  h1 span { color: var(--accent); }
+  .subtitle { color: var(--muted); margin: 0; }
+  h2 { font-size: 22px; margin: 48px 0 12px; padding-top: 8px; scroll-margin-top: 12px; }
+  h2 .no { color: var(--accent); margin-right: 8px; font-variant-numeric: tabular-nums; }
+  h3 { font-size: 16.5px; margin: 28px 0 8px; scroll-margin-top: 12px; }
+  p { margin: 8px 0; }
+  a { color: var(--accent); }
+  code { font: 13px/1.5 ui-monospace, "SF Mono", Menlo, Consolas, monospace; background: var(--kbd);
+    padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+  pre { background: var(--code-bg); color: var(--code-ink); border-radius: 10px; padding: 14px 16px; margin: 12px 0 6px;
+    overflow-x: auto; font: 13px/1.6 ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  pre code { background: none; padding: 0; color: inherit; overflow-wrap: normal; }
+  pre .c { color: var(--code-cm); }
+  pre .p { color: #6fd08c; user-select: none; }
+  .where { display: inline-block; font-size: 11.5px; font-weight: 700; letter-spacing: .5px; padding: 1px 8px;
+    border-radius: 999px; margin: 14px 0 -4px; border: 1px solid var(--line); color: var(--muted); }
+  .where.mac { color: #2f6fd6; border-color: #2f6fd6; }
+  .where.adb { color: var(--ok); border-color: var(--ok); }
+  .where.twrp { color: #a447c7; border-color: #a447c7; }
+  .where.termux { color: var(--accent); border-color: var(--accent); }
+  .explain { margin: 6px 0 14px; padding-left: 0; list-style: none; border-left: 3px solid var(--line); }
+  .explain li { padding: 2px 0 2px 14px; }
+  .explain code { font-size: 12.5px; }
+  .note, .tip { border-radius: 10px; padding: 10px 14px; margin: 14px 0; border-left: 4px solid; }
+  .note { background: var(--warn-bg); border-color: var(--warn-line); }
+  .tip { background: var(--tip-bg); border-color: var(--tip-line); }
+  .note b:first-child, .tip b:first-child { margin-right: 4px; }
+  .table-wrap { overflow-x: auto; margin: 12px 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; background: var(--paper); }
+  th, td { border: 1px solid var(--line); padding: 7px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--kbd); font-weight: 600; white-space: nowrap; }
+  .steps { counter-reset: st; list-style: none; padding: 0; }
+  .steps > li { counter-increment: st; position: relative; padding-left: 34px; margin: 8px 0; }
+  .steps > li::before { content: counter(st); position: absolute; left: 0; top: 2px; width: 22px; height: 22px;
+    border-radius: 50%; background: var(--accent); color: #fff; font-size: 12px; font-weight: 700;
+    display: grid; place-items: center; }
+  .flow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 14px 0; }
+  .flow span { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-size: 13.5px; }
+  .flow i { color: var(--muted); font-style: normal; }
+  footer { margin-top: 60px; color: var(--muted); font-size: 13px; border-top: 1px solid var(--line); padding-top: 16px; }
+  @media (max-width: 960px) {
+    .layout { grid-template-columns: 1fr; }
+    nav { position: static; max-height: none; border-right: 0; border-bottom: 1px solid var(--line); padding: 20px 16px; }
+    nav ol { columns: 2; column-gap: 16px; }
+    main { padding: 24px 16px 60px; }
+    h1 { font-size: 25px; }
+  }
+  @media (max-width: 520px) { nav ol { columns: 1; } }
+</style>
+</head>
+<body>
+<div class="layout">
+
+<nav>
+  <div class="brand">红米 Note 2 <span>小服务器</span></div>
+  <ol>
+    <li><a href="#overview">0. 概览</a></li>
+    <li><a href="#prep">1. 准备工作</a></li>
+    <li><a href="#inspect">2. 读取手机信息</a></li>
+    <li><a href="#files">3. 下载刷机文件</a></li>
+    <li><a href="#twrp">4. 刷入 TWRP</a></li>
+    <li><a href="#backup">5. 完整备份</a></li>
+    <li><a href="#flash">6. 刷入 LineageOS</a></li>
+    <li><a href="#firstboot">7. 首次开机检查</a></li>
+    <li><a href="#termux">8. 安装 Termux 与 SSH</a></li>
+    <li><a href="#services">9. 后台服务</a></li>
+    <li><a href="#dashboard">10. 状态网页</a></li>
+    <li><a href="#charge">11. 充电限制 50–60%</a></li>
+    <li><a href="#logo">12. 开机第一屏</a></li>
+    <li><a href="#bootanim">13. 开机动画与声音</a></li>
+    <li><a href="#intro">14. 开机 Termux 演示</a></li>
+    <li><a href="#ops">15. 日常维护</a></li>
+    <li><a href="#pitfalls">16. 踩坑汇总</a></li>
+    <li><a href="#paths">17. 文件位置</a></li>
+  </ol>
+</nav>
+
+<main>
+<header class="hero">
+  <h1>把旧手机变成<span>小服务器</span>：刷机与搭建全记录</h1>
+  <p class="subtitle">Redmi Note 2（hermes / MT6795）· MIUI 9 → LineageOS 14.1 → Termux 服务器 · 2026-10-17</p>
+</header>
+
+<!-- ============================================================ -->
+<h2 id="overview"><span class="no">0</span>概览</h2>
+<p>目标：一台常年插电、能上网、屏幕正常显示的局域网小服务器。最终效果：</p>
+<div class="table-wrap"><table>
+  <tr><th>功能</th><th>说明</th></tr>
+  <tr><td>系统</td><td>LineageOS 14.1（Android 7.1.2），TWRP 3.7.0 恢复模式</td></tr>
+  <tr><td>远程登录</td><td><code>ssh -p 8022 192.168.43.247</code>（Termux，密钥登录）</td></tr>
+  <tr><td>状态网页</td><td><code>http://192.168.43.247:8080</code>：电池、Wi-Fi、CPU、温度、内存、24 小时趋势</td></tr>
+  <tr><td>电池保护</td><td>电量保持在 50%–60%，避免老电池常年满电鼓包</td></tr>
+  <tr><td>开机界面</td><td>自定义第一屏、带进度条和背景音乐的开机动画、开机后 Termux 自动演示</td></tr>
+  <tr><td>自愈</td><td>SSH 和网页服务由系统 init 守护，挂了 30 秒内自动拉起，开机自动启动</td></tr>
+</table></div>
+
+<h3>整体流程</h3>
+<div class="flow">
+  <span>USB 连接</span><i>→</i><span>读信息 / 确认解锁</span><i>→</i><span>刷 TWRP</span><i>→</i>
+  <span>完整备份</span><i>→</i><span>刷 LineageOS</span><i>→</i><span>Termux + SSH</span><i>→</i>
+  <span>后台服务 / 网页 / 充电控制</span><i>→</i><span>开机界面定制</span>
+</div>
+
+<h3>设备信息</h3>
+<div class="table-wrap"><table>
+  <tr><th>项目</th><th>值</th></tr>
+  <tr><td>型号 / 代号</td><td>Redmi Note 2 / hermes</td></tr>
+  <tr><td>芯片</td><td>MediaTek MT6795M，8 核 arm64（平时只开 1–3 核）</td></tr>
+  <tr><td>内存 / 存储</td><td>2 GB / 16 GB</td></tr>
+  <tr><td>屏幕</td><td>1080 × 1920</td></tr>
+  <tr><td>原系统</td><td>MIUI 9.6.1.0（Android 5.0.2）</td></tr>
+  <tr><td>网络</td><td>Wi-Fi 热点 "Redmi7"，IP 192.168.43.247（DHCP 分配）</td></tr>
+</table></div>
+
+<h3>文中标记</h3>
+<p>每段命令前的标签说明它在哪里执行：
+  <span class="where mac">MAC</span> 在 Mac 终端执行；
+  <span class="where adb">ADB</span> 通过 <code>adb shell</code> 在手机系统里执行；
+  <span class="where twrp">TWRP</span> 手机处于 TWRP 恢复模式时，通过 adb 执行；
+  <span class="where termux">TERMUX</span> 在手机 Termux 里（或 SSH 登录后）执行。</p>
+
+<!-- ============================================================ -->
+<h2 id="prep"><span class="no">1</span>准备工作</h2>
+
+<h3>1.1 Mac 端工具</h3>
+<span class="where mac">MAC</span>
+<pre><code>which adb fastboot      <span class="c"># 确认 Android 调试工具已安装</span>
+adb devices -l          <span class="c"># 列出已连接、已授权的手机</span></code></pre>
+<ul class="explain">
+  <li><code>adb</code>：Android 调试桥，用来在手机上执行命令、传文件、重启到不同模式。</li>
+  <li><code>fastboot</code>：bootloader 模式下刷写分区的工具。两者都来自 Android SDK Platform-Tools。</li>
+  <li><code>-l</code>：显示详细信息（型号、代号），用来确认连的是哪台设备。</li>
+</ul>
+<p>另外用到：<code>ffmpeg</code>（图片 / 音频转换）、<code>yt-dlp</code>（下载音乐）、<code>python3</code>。</p>
+
+<h3>1.2 手机端设置</h3>
+<ol class="steps">
+  <li>设置 → 关于手机 → 连续点"MIUI 版本"7 次，打开开发者模式。</li>
+  <li>设置 → 其他设置 → 开发者选项 → 打开 <b>USB 调试</b>。</li>
+  <li>用数据线连接 Mac，手机弹出"允许 USB 调试吗？"时勾选"始终允许"。</li>
+</ol>
+
+<h3>1.3 USB 连不上怎么排查</h3>
+<span class="where mac">MAC</span>
+<pre><code>ioreg -p IOUSB -l -w0 | grep -E '"USB Product Name"|"idVendor"'</code></pre>
+<ul class="explain">
+  <li>列出 Mac 识别到的所有 USB 设备。小米手机的厂商号 <code>idVendor</code> 是 <code>10007</code>（0x2717），联发科是 <code>3725</code>（0x0e8d）。</li>
+  <li>如果这里都看不到手机，问题在物理层（线或接口），跟 adb 无关。</li>
+</ul>
+<div class="note"><b>实际遇到的坑：</b>前几根线都是"只能充电"的线。有一次插的是带耳机口的转换头，Mac 只认出了转换头里的 Hub 和声卡芯片（<code>AB13X USB Audio</code>），手机信号根本没过来。最后换成一根能传数据的直连线才识别出来。</div>
+
+<!-- ============================================================ -->
+<h2 id="inspect"><span class="no">2</span>读取手机信息、确认 bootloader</h2>
+<span class="where adb">ADB</span>
+<pre><code>adb shell getprop ro.product.device           <span class="c"># 设备代号，必须是 hermes</span>
+adb shell getprop ro.build.version.release    <span class="c"># Android 版本：5.0.2</span>
+adb shell getprop ro.build.version.incremental <span class="c"># MIUI 版本：V9.6.1.0.LHMCNFD</span>
+adb shell getprop ro.board.platform           <span class="c"># 芯片平台：mt6795</span>
+adb shell dumpsys battery                     <span class="c"># 电量、电池健康</span></code></pre>
+<ul class="explain">
+  <li><code>getprop</code>：读取 Android 系统属性。<b>代号</b>最重要：刷机包只能用对应代号（hermes）的，Redmi 2（wt88047）的包不能混用。</li>
+  <li><code>dumpsys battery</code>：刷机前确认电量充足（建议 &gt; 50%），刷到一半没电容易出事。</li>
+</ul>
+
+<span class="where mac">MAC</span>
+<pre><code>adb reboot bootloader            <span class="c"># 重启进 fastboot（屏幕出现兔子）</span>
+fastboot getvar all              <span class="c"># 读取 bootloader 状态</span></code></pre>
+<ul class="explain">
+  <li>输出里 <code>unlocked: yes</code>、<code>secure: no</code> 表示 bootloader <b>已经解锁</b>，可以直接刷，不用走小米官方解锁流程。</li>
+  <li>手动进 fastboot：关机后同时按住 <b>音量下 + 电源</b>。</li>
+</ul>
+<div class="note"><b>注意：</b>这台机器不支持 <code>fastboot boot twrp.img</code>（临时启动、不写入），返回 <code>unknown command</code>。所以 TWRP 只能直接刷进 recovery 分区。</div>
+
+<!-- ============================================================ -->
+<h2 id="files"><span class="no">3</span>下载刷机文件</h2>
+<div class="table-wrap"><table>
+  <tr><th>文件</th><th>来源</th><th>说明</th></tr>
+  <tr><td><code>twrp-3.7.0_9-0-hermes.img</code></td><td>TWRP 官方 dl.twrp.me/hermes</td><td>官方支持 hermes，主用</td></tr>
+  <tr><td><code>twrp-3.1.1-universal502.img</code></td><td>hermes-mirrors（GitHub Releases）</td><td>备用，支持 Android 5 分区结构</td></tr>
+  <tr><td><code>lineage-14.1-20180913-UNOFFICIAL-hermes.zip</code></td><td>hermes-mirrors（GitHub Releases）</td><td>451 MB，Android 7.1.2，非官方版</td></tr>
+</table></div>
+<span class="where mac">MAC</span>
+<pre><code>D=/Volumes/SSD1G/download/redmi-note2-flash; mkdir -p $D; cd $D
+<span class="c"># TWRP 官方下载要带 Referer（下载页地址），否则拿到的是网页而不是镜像</span>
+curl -fL -e "https://dl.twrp.me/hermes/twrp-3.7.0_9-0-hermes.img.html" \
+     -o twrp-3.7.0_9-0-hermes.img https://dl.twrp.me/hermes/twrp-3.7.0_9-0-hermes.img
+curl -fL -o lineage-14.1-20180913-UNOFFICIAL-hermes.zip \
+  https://github.com/benjaminforras/hermes-mirrors/releases/download/lineageos-14.1-20180913-hermes/lineage-14.1-20180913-UNOFFICIAL-hermes.zip
+
+file *.img                                   <span class="c"># 应显示 "Android bootimg"</span>
+unzip -tq lineage-*.zip                      <span class="c"># 校验压缩包完整</span>
+unzip -p lineage-*.zip META-INF/com/google/android/updater-script | head -1</code></pre>
+<ul class="explain">
+  <li><code>file</code>：确认下载的是真正的启动镜像（开头是 <code>ANDROID!</code>），不是报错网页。</li>
+  <li><code>unzip -tq</code>：测试 zip 里每个文件的 CRC，确认下载完整。</li>
+  <li><code>updater-script</code> 第一行是 <code>assert(getprop("ro.product.device") == "hermes" ...)</code>，说明刷错机型时它会拒绝安装，相当于多一层保险。</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="twrp"><span class="no">4</span>刷入 TWRP</h2>
+<span class="where mac">MAC</span>
+<pre><code>adb reboot bootloader
+fastboot flash recovery twrp-3.7.0_9-0-hermes.img   <span class="c"># 只写 recovery 分区，系统和数据不动</span></code></pre>
+<ul class="explain">
+  <li><code>flash recovery</code>：把镜像写进 recovery 分区，替换小米自带的恢复模式。</li>
+</ul>
+<div class="note"><b>坑：MIUI 会覆盖 TWRP。</b>第一次刷完，手机开进了 MIUI，MIUI 开机时自动把 recovery 还原成原厂（菜单里有"将 update.zip 安装至系统"）。<br>
+<b>解决：</b>刷完 <b>不要让它开进 MIUI</b>，直接用按键进 TWRP：</div>
+<ol class="steps">
+  <li>在 fastboot（兔子）界面重新执行 <code>fastboot flash recovery …</code>。</li>
+  <li>在兔子界面 <b>同时按住 音量上 + 电源</b>，约 10 秒后强制重启。</li>
+  <li>看到 Mi 标志后 <b>只松开电源，继续按住音量上</b>，直到出现 TWRP。</li>
+  <li>TWRP 问是否保持 system 只读时 <b>向右滑动</b>允许修改。TWRP 会修补系统，以后就不会再被覆盖。</li>
+</ol>
+<span class="where twrp">TWRP</span>
+<pre><code>adb devices -l          <span class="c"># 状态应为 recovery，product:cm_hermes</span></code></pre>
+
+<!-- ============================================================ -->
+<h2 id="backup"><span class="no">5</span>完整备份（救砖用）</h2>
+<p>MTK 手机刷坏最怕丢 IMEI（存在 nvram / protect1 / protect2 分区）。所以在动系统之前，先把 <b>除个人数据和缓存以外的所有分区</b> 原样复制到 Mac。</p>
+<span class="where twrp">TWRP</span>
+<pre><code>ls -l /dev/block/platform/mtk-msdc.0/by-name/      <span class="c"># 查看分区名 → 块设备的对应关系</span>
+
+B=/Volumes/SSD1G/download/redmi-note2-flash/backup-miui9-$(date +%Y%m%d); mkdir -p $B; cd $B
+for p in proinfo nvram protect1 protect2 seccfg lk boot recovery secro para logo \
+         expdb tee1 tee2 flashinfo system; do
+  adb exec-out "dd if=/dev/block/platform/mtk-msdc.0/by-name/$p bs=1M 2>/dev/null" > $p.img
+  echo "$p  手机:$(adb shell "dd if=/dev/block/platform/mtk-msdc.0/by-name/$p bs=1M 2>/dev/null | md5sum" | cut -c1-12)  Mac:$(md5 -q $p.img | cut -c1-12)"
+done
+<span class="c"># 预加载器（preloader）不在 by-name 里，单独备份</span>
+for p in mmcblk0boot0 mmcblk0boot1; do adb exec-out "dd if=/dev/block/$p bs=1M 2>/dev/null" > $p.img; done</code></pre>
+<ul class="explain">
+  <li><code>dd if=… bs=1M</code>：按 1 MB 块原样读出整个分区，连空白区域一起复制，属于"位对位"备份。</li>
+  <li><code>adb exec-out</code>：把手机上命令的二进制输出直接传到 Mac 文件。<code>adb shell</code> 可能会改换行符，传二进制必须用 <code>exec-out</code>。</li>
+  <li>每个分区都比较手机端和 Mac 端的 <code>md5</code>，一致才算备份成功。实际结果是 18 个分区全部一致，共 2.2 GB。</li>
+  <li>不备份 <code>userdata</code>（12 GB 个人数据，用户已自行处理）和 <code>cache</code>。</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="flash"><span class="no">6</span>清除并刷入 LineageOS</h2>
+<p>这个 TWRP 版本没有带命令行工具 <code>twrp</code>，所以清除和安装都是手动完成的，效果和在 TWRP 界面上点按钮一样。</p>
+
+<h3>6.1 清除旧数据（保留内部存储）</h3>
+<span class="where twrp">TWRP</span>
+<pre><code>adb shell
+mount -t ext4 /dev/block/platform/mtk-msdc.0/by-name/userdata /data
+cd /data && for f in * .[!.]*; do [ "$f" = media ] || rm -rf "$f"; done   <span class="c"># 删掉 media 以外的全部</span>
+mke2fs -t ext4 -F /dev/block/platform/mtk-msdc.0/by-name/cache             <span class="c"># 格式化 cache</span>
+mkdir -p /cache && mount -t ext4 /dev/block/platform/mtk-msdc.0/by-name/cache /cache</code></pre>
+<ul class="explain">
+  <li>MIUI 的应用数据和 LineageOS 不兼容，必须清掉；<code>/data/media</code> 是内部存储（照片等），保留。</li>
+  <li><code>mke2fs -t ext4 -F</code>：把 cache 重新格式化为 ext4，<code>-F</code> 表示强制执行。</li>
+  <li><b>cache 必须挂载</b>：安装程序会在 <code>/cache/recovery/</code> 里放临时文件。</li>
+</ul>
+<div class="note"><b>坑：E1001 Failed to update system image。</b>第一次用 <code>make_ext4fs</code> 格式化 cache 实际没成功（输出 "Total bytes: 0"），cache 也没挂载，导致安装中途失败。改用 <code>mke2fs</code> 格式化并挂载后，第二次安装成功。</div>
+
+<h3>6.2 安装刷机包</h3>
+<span class="where mac">MAC</span>
+<pre><code>adb push lineage-14.1-20180913-UNOFFICIAL-hermes.zip /data/media/0/   <span class="c"># 传到内部存储</span>
+adb shell md5sum /data/media/0/lineage-14.1-*.zip                     <span class="c"># 和 Mac 上的 md5 比对</span></code></pre>
+<span class="where twrp">TWRP</span>
+<pre><code>cd /tmp && unzip -o /data/media/0/lineage-14.1-*.zip META-INF/com/google/android/update-binary
+chmod 755 /tmp/META-INF/com/google/android/update-binary
+/tmp/META-INF/com/google/android/update-binary 3 1 /data/media/0/lineage-14.1-20180913-UNOFFICIAL-hermes.zip
+echo "EXIT=$?"          <span class="c"># 0 表示成功</span></code></pre>
+<ul class="explain">
+  <li><code>update-binary</code>：每个刷机包都自带的安装程序。TWRP 点"安装"时，其实也是在运行它。</li>
+  <li>参数 <code>3 1 &lt;zip&gt;</code>：<code>3</code> 是 recovery 接口版本，<code>1</code> 表示把进度信息输出到标准输出（文件描述符 1），最后是刷机包路径。</li>
+  <li>安装脚本做的事：检查机型 → 整个重写 system 分区（约 1 GB）→ 写入新的 boot。</li>
+</ul>
+<span class="where twrp">TWRP</span>
+<pre><code>mount -o ro /dev/block/platform/mtk-msdc.0/by-name/system /system
+grep -E "ro.build.version.release|ro.cm.version" /system/build.prop   <span class="c"># 应为 7.1.2 / 14.1-…</span>
+umount /system; sync; reboot</code></pre>
+<p>首次开机约 2 分钟。</p>
+
+<!-- ============================================================ -->
+<h2 id="firstboot"><span class="no">7</span>首次开机检查</h2>
+<span class="where adb">ADB</span>
+<pre><code>adb shell getprop sys.boot_completed     <span class="c"># 1 = 开机完成</span>
+adb shell getprop gsm.version.baseband   <span class="c"># 有值说明通信模块（基带）正常</span>
+adb shell service call iphonesubinfo 1   <span class="c"># 读取 IMEI（UTF-16 编码，需要解码）</span></code></pre>
+<ul class="explain">
+  <li><code>service call iphonesubinfo 1</code> 返回的是 Parcel 原始数据，每个 32 位字里有两个字符，而且顺序是反的。比如 <code>00360038</code> 应该读作 "86"。解码后再用 Luhn 算法验证校验位，确认 IMEI 完好（实测通过）。</li>
+</ul>
+
+<h3>7.1 打开 adb root 权限</h3>
+<span class="where adb">ADB</span>
+<pre><code>adb shell setprop persist.sys.root_access 3   <span class="c"># 3 = 应用和 adb 都可获得 root</span>
+adb root                                      <span class="c"># adbd 以 root 身份重启</span></code></pre>
+<ul class="explain">
+  <li>LineageOS 默认关闭 adb root。后面读写分区、修改系统文件都需要 root。</li>
+  <li>每次重启后 adbd 默认回到普通权限，需要时再执行一次 <code>adb root</code>。</li>
+</ul>
+
+<h3>7.2 连接 Wi-Fi（命令行）</h3>
+<span class="where adb">ADB</span>
+<pre><code>printf 'network={\n\tssid="Redmi7"\n\tpsk="热点密码"\n\tkey_mgmt=WPA-PSK\n}\n' \
+  | adb shell 'cat &gt;&gt; /data/misc/wifi/wpa_supplicant.conf'
+adb shell 'chown wifi:wifi /data/misc/wifi/wpa_supplicant.conf; svc wifi disable; svc wifi enable'</code></pre>
+<ul class="explain">
+  <li>把热点配置追加到 Android 的 Wi-Fi 配置文件，然后用 <code>svc wifi</code> 重启 Wi-Fi 让它生效。</li>
+  <li>实际操作时密码是直接从 Orange Pi 的网络配置里读出、通过管道写进手机的，没有出现在命令或日志里。</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="termux"><span class="no">8</span>安装 Termux 与 SSH</h2>
+<span class="where mac">MAC</span>
+<pre><code>curl -fLO https://f-droid.org/repo/com.termux_1002.apk        <span class="c"># Termux 0.118.3</span>
+curl -fLO https://f-droid.org/repo/com.termux.boot_1000.apk   <span class="c"># Termux:Boot 0.8.1</span>
+adb install -r com.termux_1002.apk
+adb install -r com.termux.boot_1000.apk
+adb shell 'dumpsys package com.termux | grep userId=; dumpsys package com.termux.boot | grep userId='</code></pre>
+<ul class="explain">
+  <li>必须从 <b>F-Droid</b> 下载，并且两个都来自同一来源：插件和主程序共用一个 <code>sharedUserId</code>，签名不一致的话第二个装不上。两个 <code>userId</code> 都是 10063，说明签名一致。</li>
+  <li>新版 Termux 要求 Android 7 及以上，这也是选择 LineageOS 14.1 的原因。</li>
+</ul>
+<span class="where adb">ADB</span>
+<pre><code>adb shell settings put global stay_on_while_plugged_in 3   <span class="c"># 插着 USB 或充电器时屏幕常亮</span>
+adb shell dumpsys deviceidle whitelist +com.termux          <span class="c"># 不让省电模式限制 Termux</span>
+adb shell am start -n com.termux/.app.TermuxActivity        <span class="c"># 首次打开，解压基础环境</span></code></pre>
+<ul class="explain">
+  <li><code>stay_on_while_plugged_in 3</code>：1 = 交流电，2 = USB，3 = 两者都算。</li>
+  <li><code>deviceidle whitelist</code>：Doze 省电白名单。</li>
+</ul>
+
+<h3>8.1 SSH 密钥登录</h3>
+<span class="where mac">MAC</span>
+<pre><code>H=/data/data/com.termux/files/home
+cat ~/.ssh/id_ed25519.pub | adb shell "mkdir -p $H/.ssh &amp;&amp; cat &gt; $H/.ssh/authorized_keys"
+adb shell "chmod 700 $H/.ssh; chmod 600 $H/.ssh/authorized_keys; chown -R u0_a63:u0_a63 $H/.ssh"</code></pre>
+<span class="where termux">TERMUX</span>
+<pre><code>pkg update -y &amp;&amp; pkg install -y openssh python jq neofetch procps   <span class="c"># 安装软件包</span>
+sshd                                                                 <span class="c"># 启动 SSH 服务，端口 8022</span></code></pre>
+<span class="where mac">MAC</span>
+<pre><code>ssh -p 8022 192.168.43.247      <span class="c"># 用户名可以随便写，Termux 只认密钥</span></code></pre>
+<ul class="explain">
+  <li>Termux 是普通应用，不能使用 1024 以下的端口，所以 SSH 用 <b>8022</b>。</li>
+  <li><code>u0_a63</code>（uid 10063）是 Termux 的用户，以 root 身份写入的文件要把所有者改回它。</li>
+</ul>
+<div class="note"><b>坑：Termux:API 在这个 ROM 上用不了。</b>系统组件依赖开机时设置的 <code>LD_PRELOAD</code>，Termux 用自己的值覆盖了它，导致报 <code>cannot locate symbol "__xlog_buf_printf"</code>。<code>fastfetch</code> 也是同样的原因，所以改用纯 bash 写的 <code>neofetch</code>。普通应用读不到的信息（Wi-Fi 名称等）改由 root 服务来读，见第 9 节。</div>
+
+<!-- ============================================================ -->
+<h2 id="services"><span class="no">9</span>后台服务（init 守护）</h2>
+<p>工程 <code>~/ai_claude/redmi-note2-server</code> 里有三个系统服务，都放在 <code>/system/etc/init/</code>，由 Android 的 init 进程在开机时启动：</p>
+<div class="table-wrap"><table>
+  <tr><th>服务</th><th>身份</th><th>作用</th></tr>
+  <tr><td><code>phonectl</code></td><td>root</td><td>充电限制 50–60%；每 15 秒把 Wi-Fi、IP、充电状态写入 <code>~/.phonestat.json</code></td></tr>
+  <tr><td><code>termux-services</code></td><td>uid 10063</td><td>守护 sshd 和网页服务，挂了 30 秒内拉起；持有唤醒锁</td></tr>
+  <tr><td><code>termux-intro</code></td><td>root，开机执行一次</td><td>开机完成后把 Termux 全屏打开并运行演示</td></tr>
+</table></div>
+
+<h3>9.1 服务定义示例</h3>
+<pre><code><span class="c"># system/termux-services.rc</span>
+service termux-services /system/bin/sh /system/bin/termux-services.sh
+    class late_start          <span class="c"># 在系统主要服务之后启动</span>
+    user 10063                <span class="c"># 以 Termux 用户运行（必须写数字）</span>
+    group 10063 inet wakelock <span class="c"># inet = 允许联网，wakelock = 允许持有唤醒锁</span></code></pre>
+<pre><code><span class="c"># system/termux-intro.rc</span>
+service termux-intro /system/bin/sh /system/bin/termux-intro.sh
+    user root
+    oneshot                   <span class="c"># 只运行一次，不自动重启</span>
+    disabled                  <span class="c"># 不随 class 启动，由下面的触发器启动</span>
+on property:sys.boot_completed=1
+    start termux-intro</code></pre>
+
+<h3>9.2 部署</h3>
+<span class="where mac">MAC</span>
+<pre><code>cd ~/ai_claude/redmi-note2-server
+./deploy.sh system     <span class="c"># 推送三个系统服务（需要 USB + adb root），下次开机生效</span>
+./deploy.sh web        <span class="c"># 通过 SSH 推送网页服务、开机脚本、Termux 设置</span>
+./deploy.sh all        <span class="c"># 两者都做</span></code></pre>
+<p><code>deploy.sh system</code> 内部做的事：<code>adb root</code> → <code>mount -o rw,remount /system</code>（把系统分区改成可写）→ <code>adb push</code> 脚本和 .rc 文件 → <code>chmod/chown</code> → <code>restorecon</code>（恢复 SELinux 标签）。</p>
+
+<div class="note"><b>坑 1：Termux:Boot 不可靠。</b>一开始用 Termux:Boot 开机启动 sshd，结果凌晨 3 点 SSH 和网页一起断了。日志显示 <code>ActivityManager: Killing com.termux: empty for 2049s</code>：Termux 应用闲置约 35 分钟后被系统当作空进程结束，它下面的子进程也跟着被杀。<br><b>解决：</b>改由 init 直接以 Termux 用户身份守护，不受应用清理机制影响。</div>
+<div class="note"><b>坑 2：init 不认 <code>u0_a63</code>。</b>写 <code>user u0_a63</code> 时服务不停重启，退出码 127：Android 7 的 init 无法解析应用用户名，切换用户失败。改成数字 <code>10063</code> 后正常。</div>
+<div class="note"><b>坑 3：<code>pgrep -x sshd</code> 永远找不到。</b>在这个内核上，进程名被记录为被截断的路径 <code>/data/data/com.</code>，而不是 <code>sshd</code>。改为按完整路径匹配：<code>pgrep -f "^$PREFIX/bin/sshd"</code>。</div>
+
+<!-- ============================================================ -->
+<h2 id="dashboard"><span class="no">10</span>状态网页</h2>
+<p><code>termux/webstat/server.py</code>（只用 Python 标准库）+ <code>index.html</code>，监听 <code>0.0.0.0:8080</code>，局域网里任何设备都能打开。</p>
+<div class="table-wrap"><table>
+  <tr><th>地址</th><th>内容</th></tr>
+  <tr><td><code>/</code></td><td>网页面板，每 5 秒刷新，深色或浅色跟随系统</td></tr>
+  <tr><td><code>/api/status</code></td><td>当前数据（JSON）</td></tr>
+  <tr><td><code>/api/history</code></td><td>最近 24 小时，每分钟一个采样点</td></tr>
+</table></div>
+<span class="where mac">MAC</span>
+<pre><code>curl -s http://192.168.43.247:8080/api/status | jq .battery   <span class="c"># 在 Mac 上直接查电池</span></code></pre>
+<p>数据来源：<code>/sys/class/power_supply/battery/*</code>（电池）、<code>/sys/class/thermal/thermal_zone*</code>（温度）、<code>/proc/stat</code>（CPU）、<code>/proc/meminfo</code>（内存）、<code>/proc/net/dev</code>（流量），以及 root 服务写出的 <code>~/.phonestat.json</code>（Wi-Fi 名称、IP、充电控制状态）。</p>
+<div class="note"><b>坑：CPU 使用率显示 50%，实际只有约 8%。</b>原因有两个：① 联发科内核的 iowait 计数器是坏的（会出现负数或天文数字）；② 原来在请求网页时才测量，量到的主要是网页服务自己的开销。<br><b>解决：</b>计算时去掉 iowait，并改为后台线程固定每 5 秒采样一次。负载（load average）在这个内核上空闲时也显示约 15，网页上已标注"仅供参考"。</div>
+
+<!-- ============================================================ -->
+<h2 id="charge"><span class="no">11</span>充电限制 50–60%</h2>
+<p>常年插电时，这块 2015 年的电池一直满电容易鼓包。<code>phonectl</code> 让电量到 60% 时停止充电，降到 50% 时恢复充电。50–60% 的窄区间充放电深度很浅，停电时还有一半电量，相当于一个小 UPS。</p>
+<span class="where adb">ADB</span>
+<pre><code>echo "0 1" &gt; /proc/mtk_battery_cmd/current_cmd   <span class="c"># 停止充电</span>
+echo "0 0" &gt; /proc/mtk_battery_cmd/current_cmd   <span class="c"># 恢复充电</span>
+cat /sys/class/power_supply/battery/capacity     <span class="c"># 当前电量（这个可以读）</span></code></pre>
+<ul class="explain">
+  <li>格式 <code>"A B"</code>：A 是"USB 电流不限制"开关，B 是强制放电开关（1 = 停止充电）。这个格式来自 hermes 内核源码 <code>drivers/power/mediatek/battery_common.c</code>。</li>
+  <li><code>/sys/devices/platform/battery/ChargerEnable</code> 看起来像充电开关，但实际不起作用，不要用。</li>
+</ul>
+<div class="note"><b>大坑：千万不要读取 <code>current_cmd</code>。</b>这个驱动的"读取"函数里写着 <code>cmd_discharging = 1</code>，只要执行一次 <code>cat current_cmd</code> 就会停止充电。调试时就是这样误触发的，手机一度没在充电。</div>
+<p>修改区间：在手机上创建 <code>/data/local/phonectl.conf</code>，写入 <code>CHARGE_LOW=40</code>、<code>CHARGE_HIGH=60</code>，然后重启。日志在 <code>/data/local/phonectl.log</code>。</p>
+
+<!-- ============================================================ -->
+<h2 id="logo"><span class="no">12</span>开机第一屏（logo 分区）</h2>
+<p>开机最先出现的那张图（原来的 "mi"）由 bootloader 从 <code>logo</code> 分区读取，不是普通的图片文件。</p>
+<h3>12.1 logo 分区格式</h3>
+<div class="table-wrap"><table>
+  <tr><th>位置</th><th>内容</th></tr>
+  <tr><td>0–511 字节</td><td>MTK 分区头：魔数 <code>0x58881688</code>、数据长度、名称 "LOGO"</td></tr>
+  <tr><td>之后</td><td>图片数量（39）、总长度、每张图的偏移</td></tr>
+  <tr><td>图片数据</td><td>每张都是 zlib 压缩的原始像素，全屏图为 1080×1920、BGRA 格式</td></tr>
+  <tr><td>第 0 张</td><td>fastboot 兔子</td></tr>
+  <tr><td>第 1 张</td><td>关机充电背景（星空）</td></tr>
+  <tr><td>第 2 张 / 第 38 张</td><td><b>开机第一屏</b>：bootloader 显示一次，内核再显示一次，两处都要换</td></tr>
+</table></div>
+
+<h3>12.2 生成并写入</h3>
+<span class="where mac">MAC</span>
+<pre><code>cd ~/ai_claude/redmi-note2-server
+B=/Volumes/SSD1G/download/redmi-note2-flash
+python3 tools/build_logo.py $B/backup-miui9-20261017/logo.img 我的图片.png logo-new.img --colors 64</code></pre>
+<ul class="explain">
+  <li>第 1 个参数：原厂 logo 备份，用来提供其余 37 张图和分区头。</li>
+  <li><code>--colors 64</code>：把图片减到 64 色来压缩体积。黑底文字类的图 12 色就够了；带光晕渐变的图用 64 色，避免出现一圈圈色带。</li>
+  <li>脚本默认把第 1 张充电背景换成纯黑来腾出空间，加 <code>--keep-charging-bg</code> 可以保留原图。</li>
+  <li>脚本最后会提示总大小是否在原厂大小（1.85 MB）以内。</li>
+</ul>
+<span class="where adb">ADB</span>
+<pre><code>adb root
+adb push logo-new.img /data/local/tmp/l.img
+adb shell 'dd if=/data/local/tmp/l.img of=/dev/block/platform/mtk-msdc.0/11230000.MSDC0/by-name/logo bs=1048576; sync'
+adb shell 'dd if=/dev/block/platform/mtk-msdc.0/11230000.MSDC0/by-name/logo bs=1048576 | md5sum'   <span class="c"># 和 Mac 上的 md5 比对</span></code></pre>
+<ul class="explain">
+  <li>在 LineageOS 下，分区路径多了一层 <code>11230000.MSDC0</code>，和 TWRP 下的路径不一样。</li>
+  <li>写入后读回来校验 md5，一致再重启。</li>
+</ul>
+<div class="note"><b>坑：第一屏变成黑屏。</b>第一版 logo 有 4.8 MB（原厂只有 1.8 MB），图片细节多、压缩率低，又要存两份。bootloader 读取 logo 的空间有限，读不完整就显示黑屏，而开机动画由系统读取，不受这个限制。<br><b>解决：</b>减少颜色数 + 充电背景换成纯黑，总大小降到原厂以内，第一屏恢复正常。</div>
+
+<!-- ============================================================ -->
+<h2 id="bootanim"><span class="no">13</span>开机动画与声音</h2>
+<p>第二个画面是 <code>/system/media/bootanimation.zip</code>，结构如下：</p>
+<pre><code>bootanimation.zip           <span class="c"># 必须"仅存储"，不能压缩（zip -0）</span>
+├── desc.txt
+├── part0/  00000.jpg … 00057.jpg   audio.wav
+└── part1/  00000.jpg</code></pre>
+<pre><code><span class="c"># desc.txt</span>
+1080 1920 5      <span class="c"># 宽 高 帧率（每秒 5 帧）</span>
+c 1 0 part0      <span class="c"># c = 必须完整播放；1 = 播放一次；0 = 结尾不停顿</span>
+p 0 0 part1      <span class="c"># p = 系统一就绪就可以中断；0 = 无限循环</span></code></pre>
+<ul class="explain">
+  <li><b>part0</b>：前 45 帧是进度条从 0 走到 100%（9 秒，先快后慢），之后若干帧停在 100%，补到和声音一样长。</li>
+  <li><b>audio.wav</b>：放在 part0 里，和 part0 同时开始播放，格式为 16 位 PCM。</li>
+  <li><b><code>c</code> 是关键</b>：即使系统已经准备好，也要等 part0 完整播放完才进入桌面，所以声音不会被截断。</li>
+</ul>
+<span class="where mac">MAC</span>
+<pre><code>tools/build_bootanim.sh 我的图片.png bootanimation.zip 开机声音.mp3</code></pre>
+<span class="where adb">ADB</span>
+<pre><code>adb root
+adb shell 'mount -o rw,remount /system'
+adb push bootanimation.zip /system/media/bootanimation.zip
+adb shell 'chmod 644 /system/media/bootanimation.zip; restorecon /system/media/bootanimation.zip; sync'</code></pre>
+<span class="where adb">ADB</span>
+<pre><code><span class="c"># 重启后确认声音完整播放</span>
+adb shell 'logcat -d | grep -E "found audio.wav|audioplay: (playClip|destroying)"'</code></pre>
+<div class="note"><b>坑：声音没放完就进了桌面。</b>开机时音频服务初始化要约 3 秒，画面也会等它，声音和画面同时开始；但原来 part0 只有 9 秒，声音 11 秒，系统一就绪动画就关了。<br><b>解决：</b>part0 补帧，延长到"声音时长 + 0.4 秒"。实测声音完整播放 11.5 秒，系统其实在第 7.8 秒就准备好了。代价是开机慢约 3–4 秒。</div>
+<div class="tip"><b>音乐素材：</b>用 <code>yt-dlp --no-playlist -x --audio-format mp3 --audio-quality 320K -o "%(title).60s [%(id)s].%(ext)s" &lt;链接&gt;</code> 下载。<code>--no-playlist</code> 只下当前视频，<code>--audio-quality 320K</code> 保证 320kbps（用 <code>--postprocessor-args</code> 指定码率对 webm 音源无效）。用 Audacity 剪成 8–11 秒最合适。</div>
+
+<!-- ============================================================ -->
+<h2 id="intro"><span class="no">14</span>开机 Termux 演示</h2>
+<p>进入桌面 3 秒后，<code>termux-intro</code> 把 Termux 全屏打开，运行 <code>~/bin/boot-intro</code>，整个过程约 15 秒：</p>
+<ol class="steps">
+  <li>逐字"敲出"并执行：<code>neofetch</code>、<code>uptime</code>、<code>ping</code>、<code>df</code>、<code>free</code>。</li>
+  <li><code>ai-link --all</code>：真实连接 Claude、Gemini、OpenAI 三家的 API 服务器，显示 DNS、TCP、TLS 耗时。不带任何密钥，返回 401/403 就说明服务器在线、网络通。</li>
+  <li><code>status</code>：7 项实时状态面板，全部正常时显示 <b>▶ ALL SYSTEMS NORMAL</b>，有异常时如实显示项数。</li>
+  <li>最后停在命令行，可以直接操作。</li>
+</ol>
+<span class="where adb">ADB</span>
+<pre><code><span class="c"># termux-intro.sh 的核心：通过 Termux 的命令接口，在前台新开一个会话</span>
+wm dismiss-keyguard
+am startservice --user 0 -n com.termux/com.termux.app.RunCommandService \
+  -a com.termux.RUN_COMMAND \
+  --es com.termux.RUN_COMMAND_PATH /data/data/com.termux/files/home/bin/boot-intro \
+  --ez com.termux.RUN_COMMAND_BACKGROUND false
+am start --user 0 -n com.termux/.app.TermuxActivity</code></pre>
+<ul class="explain">
+  <li><code>RUN_COMMAND</code>：Termux 提供给外部调用的命令接口，需要在 <code>~/.termux/termux.properties</code> 里开启 <code>allow-external-apps = true</code>。</li>
+  <li><code>RUN_COMMAND_BACKGROUND false</code>：在前台新建一个看得见的终端会话，而不是在后台静默执行。</li>
+  <li><code>wm dismiss-keyguard</code>：解除锁屏，作为保险。</li>
+</ul>
+<pre><code><span class="c"># ~/.termux/termux.properties</span>
+allow-external-apps = true          <span class="c"># 允许外部调用 RUN_COMMAND</span>
+fullscreen = true                   <span class="c"># 全屏，隐藏状态栏</span>
+use-fullscreen-workaround = true
+hide-soft-keyboard-on-startup = true  <span class="c"># 打开时不弹出键盘</span>
+extra-keys = []                     <span class="c"># 隐藏下方的额外按键栏</span></code></pre>
+<span class="where adb">ADB</span>
+<pre><code><span class="c"># 关闭锁屏：否则 Termux 被锁屏界面挡住</span>
+sqlite3 /data/system/locksettings.db "update locksettings set value='1' where name='lockscreen.disabled';"</code></pre>
+
+<!-- ============================================================ -->
+<h2 id="ops"><span class="no">15</span>日常维护</h2>
+<div class="table-wrap"><table>
+  <tr><th>要做的事</th><th>命令（Mac 上执行）</th></tr>
+  <tr><td>登录手机</td><td><code>ssh -p 8022 192.168.43.247</code></td></tr>
+  <tr><td>看状态</td><td>浏览器打开 <code>http://192.168.43.247:8080</code>，或 <code>./deploy.sh status</code></td></tr>
+  <tr><td>改了网页或开机脚本</td><td><code>./deploy.sh web</code>（只需 Wi-Fi）</td></tr>
+  <tr><td>改了系统服务</td><td><code>./deploy.sh system</code>（需要 USB），然后 <code>adb reboot</code></td></tr>
+  <tr><td>换第一屏</td><td>第 12 节：<code>tools/build_logo.py</code> → dd 写入 logo 分区</td></tr>
+  <tr><td>换开机动画或声音</td><td>第 13 节：<code>tools/build_bootanim.sh</code> → push 到 /system/media</td></tr>
+  <tr><td>进 TWRP</td><td><code>adb reboot recovery</code>，或重启时按住 音量上</td></tr>
+  <tr><td>进 fastboot</td><td><code>adb reboot bootloader</code>，或关机后按住 音量下 + 电源</td></tr>
+</table></div>
+
+<h3>15.1 恢复成原来的 MIUI（未实测）</h3>
+<span class="where twrp">TWRP</span>
+<pre><code>B=/Volumes/SSD1G/download/redmi-note2-flash/backup-miui9-20261017
+for p in boot system logo recovery; do
+  adb push $B/$p.img /tmp/$p.img
+  adb shell "dd if=/tmp/$p.img of=/dev/block/platform/mtk-msdc.0/by-name/$p bs=1M; rm /tmp/$p.img"
+done
+<span class="c"># 然后在 TWRP 里清除 data / cache 再重启</span></code></pre>
+<ul class="explain">
+  <li>把备份的分区原样写回去。system 有 2 GB，<code>/tmp</code> 在内存里放不下的话，改为先 push 到 <code>/data/media/0/</code>。</li>
+  <li><b>不要随便写回 nvram、protect1、protect2、preloader（mmcblk0boot0）</b>，只有在 IMEI 丢失或救砖时才需要。</li>
+</ul>
+<div class="tip"><b>定期检查：</b>每隔一段时间打开后盖看看电池有没有鼓起来。电池是 2015 年的，虽然已经限制在 50–60%，老化仍然存在。</div>
+
+<!-- ============================================================ -->
+<h2 id="pitfalls"><span class="no">16</span>踩坑汇总</h2>
+<div class="table-wrap"><table>
+  <tr><th>现象</th><th>原因</th><th>解决</th></tr>
+  <tr><td>Mac 完全识别不到手机</td><td>只能充电的线 / 带声卡的转换头</td><td>换能传数据的直连线</td></tr>
+  <tr><td><code>fastboot boot</code> 返回 unknown command</td><td>这台机器的 bootloader 不支持临时启动</td><td>直接 <code>fastboot flash recovery</code></td></tr>
+  <tr><td>TWRP 变回小米恢复模式</td><td>MIUI 开机时自动还原 recovery</td><td>刷完用 音量上 直接进 TWRP，不经过 MIUI</td></tr>
+  <tr><td>TWRP 里没有 <code>twrp</code> 命令</td><td>这个版本没打包命令行工具</td><td>手动清除 + 运行 <code>update-binary</code></td></tr>
+  <tr><td>安装报 E1001</td><td>cache 没格式化成功、没挂载</td><td><code>mke2fs</code> 格式化 cache 并挂载</td></tr>
+  <tr><td>Termux:API、fastfetch 运行失败</td><td>ROM 的 <code>LD_PRELOAD</code> 被 Termux 覆盖</td><td>root 服务代读信息；改用 neofetch</td></tr>
+  <tr><td>手机突然不充电</td><td><b>读取</b> <code>current_cmd</code> 会触发强制放电</td><td>只写不读：<code>0 0</code> 恢复充电</td></tr>
+  <tr><td>凌晨 SSH 和网页一起断开</td><td>Termux 应用被系统当作空进程清理</td><td>改由 init 守护</td></tr>
+  <tr><td>init 服务退出码 127</td><td>init 不认 <code>u0_a63</code></td><td>写数字 uid <code>10063</code></td></tr>
+  <tr><td>sshd 检测失败 / 重复启动</td><td>进程名被截断为路径</td><td><code>pgrep -f "^$PREFIX/bin/sshd"</code></td></tr>
+  <tr><td>CPU 显示 50%、负载 15</td><td>iowait 计数器坏了；测量方式不对</td><td>去掉 iowait，后台定时采样</td></tr>
+  <tr><td>第一屏黑屏</td><td>logo 文件太大，bootloader 读不完</td><td>减色 + 充电背景换黑，总大小小于原厂</td></tr>
+  <tr><td>开机声音被截断</td><td>音频初始化慢 3 秒，动画先结束了</td><td><code>c</code> 段补帧到声音长度</td></tr>
+  <tr><td>Termux 被锁屏挡住</td><td>默认开启滑动锁屏</td><td>关闭锁屏 + <code>wm dismiss-keyguard</code></td></tr>
+  <tr><td>MP3 只有 134kbps</td><td><code>--postprocessor-args</code> 对 webm 音源无效</td><td>用 <code>--audio-quality 320K</code></td></tr>
+</table></div>
+
+<!-- ============================================================ -->
+<h2 id="paths"><span class="no">17</span>文件位置</h2>
+<div class="table-wrap"><table>
+  <tr><th>内容</th><th>位置</th></tr>
+  <tr><td>工程（git）</td><td><code>~/ai_claude/redmi-note2-server/</code></td></tr>
+  <tr><td>系统服务</td><td><code>system/phonectl.*</code>、<code>system/termux-services.*</code>、<code>system/termux-intro.*</code></td></tr>
+  <tr><td>网页服务</td><td><code>termux/webstat/server.py</code>、<code>index.html</code></td></tr>
+  <tr><td>开机演示 / Termux 设置</td><td><code>termux/bin/boot-intro</code>、<code>termux/dot-termux/termux.properties</code></td></tr>
+  <tr><td>开机画面工具</td><td><code>tools/build_logo.py</code>、<code>tools/build_bootanim.sh</code></td></tr>
+  <tr><td>部署脚本</td><td><code>deploy.sh</code></td></tr>
+  <tr><td>刷机包、TWRP、APK</td><td><code>/Volumes/SSD1G/download/redmi-note2-flash/</code></td></tr>
+  <tr><td>MIUI 完整备份（2.2 GB）</td><td><code>/Volumes/SSD1G/download/redmi-note2-flash/backup-miui9-20261017/</code></td></tr>
+  <tr><td>开机图片、动画、声音素材</td><td><code>/Volumes/SSD1G/download/redmi-note2-flash/bootlogo/</code></td></tr>
+  <tr><td>音乐下载</td><td><code>/Volumes/SSD1G/download/boot-sound/</code></td></tr>
+  <tr><td>手机上的日志</td><td><code>/data/local/phonectl.log</code>、<code>~/webstat.log</code></td></tr>
+</table></div>
+
+<footer>本文档按 2026-10-17 实际操作过程整理。文中不包含 Wi-Fi 密码、IMEI 等敏感信息。</footer>
+</main>
+</div>
+</body>
+</html>

@@ -6,6 +6,8 @@ An old Redmi Note 2 (hermes, MT6795) running as an always-on LAN mini server. It
 - **Charge limiter**: keeps the battery between 50% and 60% so that being plugged in all the time doesn't wear out or swell the 2015 battery.
 - **SSH**: `ssh -p 8022 192.168.43.247` (Termux, key auth).
 
+**Full step-by-step guide (Chinese, commands explained):** [docs/build-guide.html](docs/build-guide.html)
+
 ## Layout
 
 ```
@@ -13,6 +15,9 @@ system/phonectl.sh     root service: charge limiter + root-only info -> ~/.phone
 system/phonectl.rc     init service definition (/system/etc/init)
 termux/webstat/        dashboard (Python stdlib server + one HTML page)
 system/termux-services* init-supervised sshd + dashboard (as the Termux uid), survives app kills
+tools/build_logo.py    custom first boot screen -> logo partition image
+tools/build_bootanim.sh  progress-bar boot animation (+ optional sound)
+docs/build-guide.html  full flashing + setup guide
 deploy.sh              system | web | all | status
 ```
 
