@@ -1,0 +1,10 @@
+# Cloudflare tunnel "redmi": https://info.tomexp.com -> dashboard.
+# Credentials (cert.pem, <id>.json) live only on the phone in ~/.cloudflared.
+tunnel: 2757dd82-f2b8-49e0-86ac-77f157b4a8ec
+credentials-file: /data/data/com.termux/files/home/.cloudflared/2757dd82-f2b8-49e0-86ac-77f157b4a8ec.json
+# QUIC/UDP is often throttled on hotspots; http2 runs over TCP 443
+protocol: http2
+ingress:
+  - hostname: info.tomexp.com
+    service: http://127.0.0.1:8080
+  - service: http_status:404

@@ -25,5 +25,9 @@ while true; do
   if [ -f $HOME/.frpc.toml ] && ! pgrep -f "^$PREFIX/bin/frpc" >/dev/null; then
     $PREFIX/bin/frpc -c $HOME/.frpc.toml >> $HOME/frpc.log 2>&1 &
   fi
+  # Cloudflare tunnel (https://info.tomexp.com -> dashboard); config from ./deploy.sh web
+  if [ -f $HOME/.cloudflared/config.yml ] && ! pgrep -f "^$PREFIX/bin/cloudflared" >/dev/null; then
+    $PREFIX/bin/cloudflared --no-autoupdate tunnel --config $HOME/.cloudflared/config.yml run >> $HOME/cloudflared.log 2>&1 &
+  fi
   sleep 30
 done

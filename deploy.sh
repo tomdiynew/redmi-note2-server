@@ -41,6 +41,8 @@ web() {
     scp -q -P 8022 termux/frpc/frpc.toml "$PHONE":.frpc.toml
     "${SSH[@]}" 'chmod 600 ~/.frpc.toml; command -v frpc >/dev/null || pkg install -y frp; pkill -f "bin/[f]rpc " || true'
   fi
+  scp -q -P 8022 termux/cloudflared/config.yml "$PHONE":.cloudflared/config.yml
+  "${SSH[@]}" 'command -v cloudflared >/dev/null || pkg install -y cloudflared; pkill -f "bin/[c]loudflared " || true'
   "${SSH[@]}" 'chmod 700 ~/webstat/server.py; rm -f ~/.termux/boot/start-sshd ~/.termux/boot/start-services ~/webstat/restart.sh'
   "${SSH[@]}" 'pkill -f "python3 .*webstat/[s]erver.py"; echo "webstat restarting (termux-services supervisor relaunches it within 30s)"'
 }
@@ -51,6 +53,6 @@ case "${1:-}" in
   all) system; web ;;
   status)
     adb shell 'getprop init.svc.phonectl; tail -n 5 /data/local/phonectl.log' 2>/dev/null || true
-    "${SSH[@]}" 'pgrep -fl "[s]shd|[w]ebstat|[f]rpc"; tail -n 3 ~/webstat.log' ;;
+    "${SSH[@]}" 'pgrep -fl "[s]shd|[w]ebstat|[f]rpc|[c]loudflared"; tail -n 3 ~/webstat.log' ;;
   *) sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
 esac
