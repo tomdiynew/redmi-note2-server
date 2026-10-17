@@ -22,8 +22,17 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT_JSON = os.path.join(HOME, ".phonestat.json")
 HIST_FILE = os.path.join(HOME, ".webstat_history.json")
 BAT = "/sys/class/power_supply/battery"
+# thermal zone type -> label. Redmi Note 2 (MediaTek) and Pixel 2 XL (Snapdragon 835).
 THERMAL_NAMES = {"mtktscpu": "CPU", "mtktsbattery": "电池", "mtktsAP": "主板",
-                 "mtktspmic": "电源芯片", "mtktswmt": "Wi-Fi 芯片"}
+                 "mtktspmic": "电源芯片", "mtktswmt": "Wi-Fi 芯片",
+                 "battery": "电池", "pm8998_tz": "电源芯片", "xo_therm": "主板", "usb_port_temp": "USB 口"}
+CPU_ZONE_PREFIX = "tsens_tz_sensor"  # Snapdragon: CPU = hottest tsens sensor
+
+
+def celsius(raw):
+    """Zones report °C, deci-°C or milli-°C depending on the driver."""
+    v = abs(raw)
+    return raw / 1000 if v >= 1000 else raw / 10 if v >= 150 else raw
 
 
 def read(path, default=None):
@@ -112,7 +121,7 @@ class Sampler:
 
 sampler = Sampler()
 STATIC = {"model": getprop("ro.product.model"), "android": getprop("ro.build.version.release"),
-          "rom": getprop("ro.cm.version") or getprop("ro.build.display.id"),
+          "rom": getprop("ro.lineage.version") or getprop("ro.cm.version") or getprop("ro.build.display.id"),
           "kernel": os.uname().release, "arch": os.uname().machine}
 
 
@@ -129,13 +138,22 @@ def status():
         a, _, b = part.partition("-")
         cores += range(int(a), int(b or a) + 1)
     freqs = {c: num(f"/sys/devices/system/cpu/cpu{c}/cpufreq/scaling_cur_freq", 1 / 1000) for c in cores}
-    temps = {}
+    temps, tsens = {}, []
     for z in sorted(os.listdir("/sys/class/thermal")):
         if z.startswith("thermal_zone"):
-            name = THERMAL_NAMES.get(read(f"/sys/class/thermal/{z}/type"))
-            t = num(f"/sys/class/thermal/{z}/temp", 1 / 1000)
-            if name and t is not None and t > -40:
-                temps[name] = round(t, 1)
+            ztype = read(f"/sys/class/thermal/{z}/type", "")
+            raw = num(f"/sys/class/thermal/{z}/temp")
+            if raw is None:
+                continue
+            t = celsius(raw)
+            if not -40 < t < 150:
+                continue
+            if ztype.startswith(CPU_ZONE_PREFIX):
+                tsens.append(t)
+            elif ztype in THERMAL_NAMES:
+                temps[THERMAL_NAMES[ztype]] = round(t, 1)
+    if tsens:
+        temps["CPU"] = round(max(tsens), 1)
     try:
         with open(ROOT_JSON) as f:
             root = json.load(f)
@@ -153,8 +171,10 @@ def status():
         "memory": {"total": mem.get("MemTotal"), "available": mem.get("MemAvailable", mem.get("MemFree"))},
         "storage": {"total": vfs.f_blocks * vfs.f_frsize, "free": vfs.f_bavail * vfs.f_frsize},
         "battery": {"level": num(f"{BAT}/capacity"), "status": read(f"{BAT}/status"),
-                    "health": read(f"{BAT}/health"), "voltage_mv": num(f"{BAT}/batt_vol"),
-                    "temp_c": num(f"{BAT}/batt_temp", 0.1),
+                    "health": read(f"{BAT}/health"),
+                    # MTK: batt_vol (mV), batt_temp (0.1 °C); Qualcomm: voltage_now (µV), temp (0.1 °C)
+                    "voltage_mv": num(f"{BAT}/batt_vol") or num(f"{BAT}/voltage_now", 1 / 1000),
+                    "temp_c": num(f"{BAT}/batt_temp", 0.1) or num(f"{BAT}/temp", 0.1),
                     "usb": read("/sys/class/power_supply/usb/online") == "1",
                     "ac": read("/sys/class/power_supply/ac/online") == "1"},
         "network": {"rx_bps": round(sampler.net_rate[0]), "tx_bps": round(sampler.net_rate[1]),

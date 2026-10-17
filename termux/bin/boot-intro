@@ -5,7 +5,8 @@
 #     checks, no API keys; a 401/403 reply still proves the endpoint is up)
 #  3. prints a live status board, then leaves an interactive shell
 
-PROMPT=$'\033[1;32mlaohan@redmi\033[0m:\033[1;34m~\033[0m$ '
+case $(getprop ro.product.device) in taimen) HOSTNAME_=pixel ;; *) HOSTNAME_=redmi ;; esac
+PROMPT=$'\033[1;32m'"laohan@$HOSTNAME_"$'\033[0m:\033[1;34m~\033[0m$ '
 G=$'\033[1;32m' R=$'\033[1;31m' Y=$'\033[1;33m' C=$'\033[1;36m' D=$'\033[2m' W=$'\033[1;37m' N=$'\033[0m'
 FAILS=0
 
@@ -75,7 +76,10 @@ up=$([ $upm -ge 60 ] && echo "$((upm / 60)) 小时 $((upm % 60)) 分钟" || echo
 
 printf '%s' "$PROMPT"; type_out "status"; printf '\n\n'; sleep 0.3
 printf '  %s━━━━━━━━━━━━ 服务器状态 ━━━━━━━━━━━━%s\n' "$C" "$N"
-row "SSH     " ":8022"                     "$(pgrep -f "^$PREFIX/bin/sshd" >/dev/null && echo 1)" "未运行"
+# probe the port instead of pgrep: on the Pixel sshd runs in Magisk's SELinux domain,
+# which the Termux app (untrusted_app) is not allowed to see in /proc
+port_open() { timeout 2 bash -c "exec 3<>/dev/tcp/127.0.0.1/$1" 2>/dev/null; }
+row "SSH     " ":8022"                     "$(port_open 8022 && echo 1)" "未运行"
 row "网页面板" ":8080"                     "$([ -n "$s" ] && echo 1)" "未响应"
 row "充电控制" "${lo:-?}-${hi:-?}%"        "$([ "${age:-999}" -lt 60 ] && echo 1)" "未运行"
 row "Wi-Fi   " "${ssid:-未连接} ${rssi:+${rssi}dBm}" "$([ -n "$ssid" ] && echo 1)" "未连接"

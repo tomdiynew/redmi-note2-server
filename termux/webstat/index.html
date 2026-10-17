@@ -124,7 +124,7 @@
   </div>
 
   <div class="err" id="err" hidden></div>
-  <footer>每 5 秒刷新 · 趋势每分钟记录一次 · Redmi Note 2 / LineageOS 14.1 / Termux</footer>
+  <footer id="foot">每 5 秒刷新 · 趋势每分钟记录一次</footer>
 </div>
 
 <script>
@@ -146,7 +146,8 @@ function signal(rssi) {
 function render(s) {
   const b = s.battery, r = s.root || {}, ctl = r.charge_ctl, w = r.wifi || {};
   $('dot').className = 'dot'; $('online').textContent = '在线 · ' + new Date(s.time*1000).toLocaleTimeString('zh-CN');
-  $('model').textContent = s.device.model; $('uptime').textContent = fmtUp(s.uptime_s);
+  $('model').textContent = s.device.model;
+  $('foot').textContent = `每 5 秒刷新 · 趋势每分钟记录一次 · ${s.device.model} / LineageOS ${s.device.rom} / Android ${s.device.android} / Termux`; $('uptime').textContent = fmtUp(s.uptime_s);
 
   $('bat').innerHTML = `${Math.round(b.level)}<small>%</small>`;
   $('batstate').textContent = STATUS[b.status] || b.status;
