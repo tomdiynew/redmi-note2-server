@@ -102,7 +102,7 @@
     <li><a href="#termux">8. 安装 Termux 与 SSH</a></li>
     <li><a href="#services">9. 后台服务</a></li>
     <li><a href="#dashboard">10. 状态网页</a></li>
-    <li><a href="#charge">11. 充电限制 40–70%</a></li>
+    <li><a href="#charge">11. 充电限制 50–60%</a></li>
     <li><a href="#logo">12. 开机第一屏</a></li>
     <li><a href="#bootanim">13. 开机动画与声音</a></li>
     <li><a href="#intro">14. 开机 Termux 演示</a></li>
@@ -126,7 +126,7 @@
   <tr><td>系统</td><td>LineageOS 14.1（Android 7.1.2），TWRP 3.7.0 恢复模式</td></tr>
   <tr><td>远程登录</td><td><code>ssh -p 8022 192.168.43.247</code>（Termux，密钥登录）</td></tr>
   <tr><td>状态网页</td><td><code>http://192.168.43.247:8080</code>：电池、Wi-Fi、CPU、温度、内存、24 小时趋势</td></tr>
-  <tr><td>电池保护</td><td>电量保持在 40%–70%，避免老电池常年满电鼓包</td></tr>
+  <tr><td>电池保护</td><td>电量保持在 50%–60%，避免老电池常年满电鼓包</td></tr>
   <tr><td>开机界面</td><td>自定义第一屏、带进度条和背景音乐的开机动画、开机后 Termux 自动演示</td></tr>
   <tr><td>自愈</td><td>SSH 和网页服务由系统 init 守护，挂了 30 秒内自动拉起，开机自动启动</td></tr>
 </table></div>
@@ -389,7 +389,7 @@ sshd                                                                 <span class
 <p>工程 <code>~/ai_claude/redmi-note2-server</code> 里有三个系统服务，都放在 <code>/system/etc/init/</code>，由 Android 的 init 进程在开机时启动：</p>
 <div class="table-wrap"><table>
   <tr><th>服务</th><th>身份</th><th>作用</th></tr>
-  <tr><td><code>phonectl</code></td><td>root</td><td>充电限制 40–70%；每 15 秒把 Wi-Fi、IP、充电状态写入 <code>~/.phonestat.json</code></td></tr>
+  <tr><td><code>phonectl</code></td><td>root</td><td>充电限制 50–60%；每 15 秒把 Wi-Fi、IP、充电状态写入 <code>~/.phonestat.json</code></td></tr>
   <tr><td><code>termux-services</code></td><td>uid 10063</td><td>守护 sshd 和网页服务，挂了 30 秒内拉起；持有唤醒锁</td></tr>
   <tr><td><code>termux-intro</code></td><td>root，开机执行一次</td><td>开机完成后把 Termux 全屏打开并运行演示</td></tr>
 </table></div>
@@ -435,8 +435,8 @@ on property:sys.boot_completed=1
 <div class="note"><b>坑：CPU 使用率显示 50%，实际只有约 8%。</b>原因有两个：① 联发科内核的 iowait 计数器是坏的（会出现负数或天文数字）；② 原来在请求网页时才测量，量到的主要是网页服务自己的开销。<br><b>解决：</b>计算时去掉 iowait，并改为后台线程固定每 5 秒采样一次。负载（load average）在这个内核上空闲时也显示约 15，网页上已标注"仅供参考"。</div>
 
 <!-- ============================================================ -->
-<h2 id="charge"><span class="no">11</span>充电限制 40–70%</h2>
-<p>常年插电时，这块 2015 年的电池一直满电容易鼓包。<code>phonectl</code> 让电量到 60% 时停止充电，降到 50% 时恢复充电。40–70% 的窄区间充放电深度很浅，停电时还有一半电量，相当于一个小 UPS。</p>
+<h2 id="charge"><span class="no">11</span>充电限制 50–60%</h2>
+<p>常年插电时，这块 2015 年的电池一直满电容易鼓包。<code>phonectl</code> 让电量到 60% 时停止充电，降到 50% 时恢复充电。50–60% 的窄区间充放电深度很浅，停电时还有一半电量，相当于一个小 UPS。</p>
 <span class="where adb">ADB</span>
 <pre><code>echo "0 1" &gt; /proc/mtk_battery_cmd/current_cmd   <span class="c"># 停止充电</span>
 echo "0 0" &gt; /proc/mtk_battery_cmd/current_cmd   <span class="c"># 恢复充电</span>
@@ -446,8 +446,9 @@ cat /sys/class/power_supply/battery/capacity     <span class="c"># 当前电量�
   <li><code>/sys/devices/platform/battery/ChargerEnable</code> 看起来像充电开关，但实际不起作用，不要用。</li>
 </ul>
 <div class="note"><b>大坑：千万不要读取 <code>current_cmd</code>。</b>这个驱动的"读取"函数里写着 <code>cmd_discharging = 1</code>，只要执行一次 <code>cat current_cmd</code> 就会停止充电。调试时就是这样误触发的，手机一度没在充电。</div>
-<div class="note"><b>为什么从 50–60% 改成了 40–70%：</b>实测发现，联发科的"停止充电"会把整个充电电路断开，手机改吃电池，不像骁龙那样改由 USB 直接供电。区间太窄时，手机一天要在 60% 和 50% 之间来回约 22 次，相当于每天 2 次完整充放电，损耗反而更大。<br>
-也试过用温控里的充电限流（<code>/proc/driver/thermal/clbcct</code> + 冷却设备 <code>mtk-cl-bcct00</code>，限流值要写 1，写 0 会被忽略），希望做到电源直通。但系统温控每 5 秒检查一次，不到 1 秒就把它关回去了，除非修改温控绑定。电池温控上还挂着 60°C 过热关机保护，所以没有采用这个办法。</div>
+<div class="note"><b>实测发现：联发科的"停止充电"会断开整个充电电路，手机改吃电池</b>（骁龙的 Pixel 不会，它改由 USB 直接供电）。所以电池损耗取决于<b>手机耗电多少</b>，和区间设多宽关系不大：把区间放宽成 40–70%，每天总的充放电量还是一样，只是变成了次数更少、每次更深。<br>
+<b>真正有效的是关屏</b>：屏幕超时设为 60 秒，并关闭插电常亮（<code>stay_on_while_plugged_in 0</code>）。耗电从约 1.4W 降到约 0.35W，相当于每天约 0.7 次完整充放电，原来约 2 次。SSH 和网页服务靠唤醒锁继续运行。<br>
+也试过用温控里的充电限流（<code>/proc/driver/thermal/clbcct</code> + <code>mtk-cl-bcct00</code>，限流值要写 1，写 0 会被忽略）做电源直通，但系统温控每 5 秒检查一次，不到 1 秒就把它关回去了。电池温控上还挂着 60°C 过热关机保护，所以没有去修改温控绑定。</div>
 <p>修改区间：在手机上创建 <code>/data/local/phonectl.conf</code>，写入 <code>CHARGE_LOW=40</code>、<code>CHARGE_HIGH=60</code>，然后重启。日志在 <code>/data/local/phonectl.log</code>。</p>
 
 <!-- ============================================================ -->
@@ -573,7 +574,7 @@ done
   <li>把备份的分区原样写回去。system 有 2 GB，<code>/tmp</code> 在内存里放不下的话，改为先 push 到 <code>/data/media/0/</code>。</li>
   <li><b>不要随便写回 nvram、protect1、protect2、preloader（mmcblk0boot0）</b>，只有在 IMEI 丢失或救砖时才需要。</li>
 </ul>
-<div class="tip"><b>定期检查：</b>每隔一段时间打开后盖看看电池有没有鼓起来。电池是 2015 年的，虽然已经限制在 40–70%，老化仍然存在。</div>
+<div class="tip"><b>定期检查：</b>每隔一段时间打开后盖看看电池有没有鼓起来。电池是 2015 年的，虽然已经限制在 50–60%，老化仍然存在。</div>
 
 <!-- ============================================================ -->
 <h2 id="pitfalls"><span class="no">16</span>踩坑汇总</h2>

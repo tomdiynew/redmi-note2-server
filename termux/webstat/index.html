@@ -203,7 +203,7 @@ function chart(svg, pts, key, lo, hi, band, unit, color) {
   svg.innerHTML = g;
 }
 
-let ctlBand = [40, 70];
+let ctlBand = [50, 60];
 async function tick() {
   try {
     const s = await (await fetch('/api/status', {cache: 'no-store'})).json();

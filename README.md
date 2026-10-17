@@ -3,7 +3,7 @@
 An old Redmi Note 2 (hermes, MT6795) running as an always-on LAN mini server. It runs LineageOS 14.1 and Termux.
 
 - **Dashboard**: http://192.168.43.247:8080, reachable from anywhere on the LAN. Shows battery, Wi-Fi, CPU, temperatures, memory/storage and 24h trends. Refreshes every 5s.
-- **Charge limiter**: keeps the battery between 40% and 70% so that being plugged in all the time doesn't wear out or swell the 2015 battery. The window used to be 50–60%. MTK's "stop charging" cuts the charger off completely, so the phone runs on its battery, and a narrow window meant about 22 shallow cycles a day (about 2 full cycles a day). The thermal BCCT current limit (`/proc/driver/thermal/clbcct` + `mtk-cl-bcct00`) was tested as a power-path alternative, but the thermal governor resets the cooler to state 0 within a second.
+- **Charge limiter**: keeps the battery between 50% and 60%. MTK's "stop charging" cuts the charger off completely, so the phone runs on its battery while charging is paused. Battery wear is therefore set by how much power the phone draws, not by how wide the window is. The screen now turns off after 60 s: draw fell from about 1.4 W to about 0.35 W, which is about 0.7 full cycles a day instead of 2. A thermal BCCT current limit (`/proc/driver/thermal/clbcct`) was tested as a power-path hold, but the thermal governor resets it within a second.
 - **SSH**: `ssh -p 8022 192.168.43.247` (Termux, key auth).
 
 ## Screenshots

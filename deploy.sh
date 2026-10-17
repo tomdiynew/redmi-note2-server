@@ -23,7 +23,10 @@ system() {
     chmod 644 etc/init/phonectl.rc etc/init/termux-services.rc etc/init/termux-intro.rc
     chown root:root bin/*.sh etc/init/phonectl.rc etc/init/termux-services.rc etc/init/termux-intro.rc
     restorecon bin/phonectl.sh bin/termux-services.sh bin/termux-intro.sh etc/init/phonectl.rc etc/init/termux-services.rc etc/init/termux-intro.rc 2>/dev/null
-    mount -o ro,remount /system; sync'
+    mount -o ro,remount /system; sync
+    # screen off after 60 s: on MTK "stop charging" means running from the battery,
+    # so the screen (~1 W) was most of the battery wear. Services keep a wake lock.
+    settings put global stay_on_while_plugged_in 0; settings put system screen_off_timeout 60000'
   echo "installed; init services load at next boot"
 }
 
