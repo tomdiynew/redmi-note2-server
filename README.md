@@ -57,6 +57,20 @@ To change the charge window, create `/data/local/phonectl.conf` on the phone (fo
 - SELinux is permissive, which is why `phonectl` can run without its own SELinux domain.
 - To reach TWRP, hold Vol Up during a reboot. MIUI-era notes and the full partition backup are in `/Volumes/SSD1G/download/redmi-note2-flash/`.
 
+## Theme "Pioneer"
+
+The default wallpaper plus 16 app icons (Phone, Messaging, Contacts, Calendar, Clock, Camera, Gallery, Settings, Files, Browser, Music, Recorder, Calculator, Email, Terminal, Termux) are installed as static resource overlays in `/vendor/overlay`.
+
+- `assets/theme/`: icon art (Real-ESRGAN x4 upscale) and the wallpaper. National symbols have been removed: no flag, no Tiananmen, no Great Wall.
+- `tools/theme/gen_overlays.py` (Mac): writes `theme/overlays/`. Android 7 has no adaptive icons, so the icons are pre-cut squircle PNGs at mdpi–xxxhdpi.
+- `tools/theme/build_overlays.sh` (build box, needs the AOSP tree's aapt2 / API 25 android.jar / apksigner): builds the signed APKs into `theme/out/`.
+- `tools/theme/install.sh` (adb): pushes the overlays to `/system/vendor/overlay`, resets the wallpaper and Trebuchet's icon cache, then reboots.
+
+Gotchas on Android 7:
+- The overlay configs must carry the same `-v4` qualifier as the target's aapt1-built resources. A plain `mipmap-xxhdpi` loses to the target's own `mipmap-xxhdpi-v4`.
+- aapt2 strips `-v4` when minSdk ≥ 4, so the overlays are linked with minSdk 1.
+- Overlays are only trusted when PackageManager finds them in `/vendor/overlay` at boot. `pm install` fails with "overlay not trusted".
+
 ## License & credits
 
 Code, docs, boot pictures and the boot sound (an original recording) are MIT-licensed. See [LICENSE](LICENSE).
