@@ -4,11 +4,13 @@
 GET /             dashboard page
 GET /api/status   current readings (JSON)
 GET /api/history  last 24h of 1-minute samples (JSON)
-GET /api/markets  index / commodity quotes from Sina, cached 30s (JSON)
+GET /api/markets  index / commodity quotes from Sina (cached 30s) and
+                  Brazilian beef/soy from CEPEA (daily, cached 1h) (JSON)
 
 Root-only data (Wi-Fi SSID, IP, charge control) comes from ~/.phonestat.json,
 written every 15s by the phonectl root service.
 """
+import html
 import json
 import os
 import re
@@ -133,11 +135,17 @@ MARKETS = [
     ("美股", [("gb_$dji", ""), ("gb_$inx", ""), ("gb_$ixic", "")]),
     ("A 股", [("sh000001", ""), ("sz399001", ""), ("sz399006", ""), ("sh000300", "")]),
     ("港股", [("hkHSI", ""), ("hkHSTECH", ""), ("hkHSCEI", "")]),
-    ("贵金属", [("hf_GC", "美元/盎司"), ("hf_SI", "美元/盎司")]),
+    ("贵金属", [("hf_XAU", "美元/盎司"), ("hf_XAG", "美元/盎司"), ("hf_GC", "美元/盎司"), ("hf_SI", "美元/盎司"),
+               ("hf_XPT", "美元/盎司"), ("hf_XPD", "美元/盎司"), ("nf_AU0", "元/克"), ("nf_AG0", "元/千克")]),
     ("能源", [("hf_CL", "美元/桶"), ("hf_OIL", "美元/桶"), ("hf_NG", "美元/百万英热")]),
     ("农产品", [("hf_C", "美分/蒲式耳"), ("hf_S", "美分/蒲式耳"), ("hf_W", "美分/蒲式耳")]),
+    ("巴西农产品", [("cepea:boi-gordo", "雷亚尔/arroba (15 kg)"), ("cepea:soja", "雷亚尔/袋 (60 kg)")]),
     ("汇率", [("fx_susdcny", "")]),
 ]
+# CEPEA (USP) daily indicators; the first table on each page is the headline one
+CEPEA_NAMES = {"boi-gordo": "巴西肥牛（圣保罗）", "soja": "巴西大豆（巴拉那瓜港）"}
+CEPEA_TTL = 3600
+_cepea = {}
 MARKET_TTL = 30
 _markets = {"ts": 0, "data": None}
 _markets_lock = threading.Lock()
@@ -161,7 +169,9 @@ def parse_sina(code, f):
         if code.startswith("hk"):
             return f[1], _f(f[6]), _f(f[3]), _f(f[4]), _f(f[5]), f[17][5:].replace("/", "-") + " " + f[18]
         if code.startswith("hf_"):
-            return f[13], _f(f[0]), _f(f[7]), _f(f[4]), _f(f[5]), f[12][5:] + " " + f[6][:5]
+            return re.sub(r"（现货.+）", "（现货）", f[13]), _f(f[0]), _f(f[7]), _f(f[4]), _f(f[5]), f[12][5:] + " " + f[6][:5]
+        if code.startswith("nf_"):  # Shanghai futures main contract; prev = last settlement
+            return "沪" + f[0][1] + "（主力）", _f(f[8]), _f(f[10]), _f(f[3]), _f(f[4]), f[17][5:] + " " + f[1][:2] + ":" + f[1][2:4]
         if code.startswith("fx_"):
             return "美元/人民币", _f(f[8]), _f(f[3]), _f(f[6]), _f(f[7]), f[17][5:] + " " + f[0][:5]
     except IndexError:
@@ -169,14 +179,49 @@ def parse_sina(code, f):
     return None
 
 
+def fetch_cepea(slug):
+    """-> same tuple as parse_sina, from the latest two rows of the indicator table."""
+    req = Request(f"https://www.cepea.org.br/br/indicador/{slug}.aspx", headers={
+        # a bare UA gets a 403
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+                      "(KHTML, like Gecko) Chrome/130.0 Safari/537.36", "Accept-Language": "pt-BR"})
+    with urlopen(req, timeout=15) as r:
+        page = r.read().decode("utf-8", "replace")
+    table = re.search(r"<table.*?</table>", page, re.S).group(0)
+    rows = []
+    for tr in re.findall(r"<tr.*?</tr>", table, re.S):
+        cells = [html.unescape(re.sub(r"<[^>]+>", "", c)).strip() for c in re.findall(r"<td.*?</td>", tr, re.S)]
+        if len(cells) >= 2 and re.match(r"\d\d/\d\d/\d{4}", cells[0]):
+            rows.append((cells[0], float(cells[1].replace(".", "").replace(",", "."))))
+    (day, price), (_, prev) = rows[0], rows[1]
+    return CEPEA_NAMES[slug], price, prev, None, None, day[3:5] + "-" + day[:2] + " 收盘"
+
+
+def cepea(slug):
+    """Daily data: refetch hourly, keep the last good value if the site is down."""
+    c = _cepea.get(slug)
+    if not c or time.time() - c[0] > CEPEA_TTL:
+        try:
+            _cepea[slug] = c = (time.time(), fetch_cepea(slug))
+        except Exception as e:
+            print("cepea error:", slug, e, flush=True)
+            if c:
+                _cepea[slug] = c = (time.time() - CEPEA_TTL + 300, c[1])  # retry in 5 min
+    return c[1] if c else None
+
+
 def fetch_markets():
-    codes = [c for _, items in MARKETS for c, _ in items]
+    codes = [c for _, items in MARKETS for c, _ in items if not c.startswith("cepea:")]
     req = Request("https://hq.sinajs.cn/list=" + ",".join(codes),
                   headers={"Referer": "https://finance.sina.com.cn", "User-Agent": "Mozilla/5.0"})
     with urlopen(req, timeout=8) as r:
         raw = r.read().decode("gbk", "replace")
     quotes = {m.group(1): parse_sina(m.group(1), m.group(2).split(","))
               for m in re.finditer(r'hq_str_([^=]+)="([^"]*)"', raw)}
+    for _, items in MARKETS:
+        for code, _ in items:
+            if code.startswith("cepea:"):
+                quotes[code] = cepea(code[6:])
     groups = []
     for title, items in MARKETS:
         rows = []

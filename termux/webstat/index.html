@@ -168,7 +168,7 @@
   <div id="page-markets" hidden>
     <div class="grid mkt" id="mkt"><section class="card"><h2>行情</h2><div class="sub">加载中…</div></section></div>
     <div class="err" id="mkterr" hidden></div>
-    <footer id="mktfoot">数据来自新浪财经 · 每 30 秒刷新 · 红涨绿跌</footer>
+    <footer id="mktfoot">数据来自新浪财经、CEPEA（巴西，每日收盘） · 每 30 秒刷新 · 红涨绿跌</footer>
   </div>
 </main>
 </div>
@@ -277,7 +277,7 @@ async function markets() {
           <div class="note ${c}">${sg}${fmtNum(q.chg)} · ${sg}${q.pct.toFixed(2)}%</div></td></tr>`; }).join('')}</table></section>`).join('');
     $('mkterr').hidden = !m.error;
     if (m.error) $('mkterr').textContent = '行情更新失败，显示的是上次数据：' + m.error;
-    $('mktfoot').textContent = `数据来自新浪财经 · 每 30 秒刷新 · 红涨绿跌 · 更新于 ${new Date(m.time*1000).toLocaleTimeString('zh-CN')}`;
+    $('mktfoot').textContent = `数据来自新浪财经、CEPEA（巴西，每日收盘） · 每 30 秒刷新 · 红涨绿跌 · 更新于 ${new Date(m.time*1000).toLocaleTimeString('zh-CN')}`;
   } catch (e) {
     $('mkterr').hidden = false; $('mkterr').textContent = '行情加载失败';
   }
