@@ -3,6 +3,15 @@
 An old Redmi Note 2 (hermes, MT6795) running as an always-on LAN mini server. It runs LineageOS 14.1 and Termux.
 
 - **Dashboard**: http://192.168.43.247:8080, reachable from anywhere on the LAN. Shows battery, Wi-Fi, CPU, temperatures, memory/storage and 24h trends. Refreshes every 5s.
+- **每日新闻** page (also at https://info.tomexp.com/#news). Every day at 07:00 phone time it fetches 20 headlines each from every country's own outlets:
+  - world: BBC / The Guardian / NYT
+  - China: 中国新闻网 / 人民网
+  - Korea: 연합뉴스
+  - Japan: NHK / 朝日新聞
+  - Vietnam: VnExpress / Tuổi Trẻ
+  - Europe: DW / Le Monde / Der Spiegel
+
+  Each headline shows the original (linked) plus an automatic Chinese translation, and each day is saved as `~/news/<date>.html`. The menu lists the days with their status (generated / partly failed / failed with the error / not generated yet). Same code as pixel2xl-server.
 - **Charge limiter**: keeps the battery between 50% and 60%. MTK's "stop charging" cuts the charger off completely, so the phone runs on its battery while charging is paused. Battery wear is therefore set by how much power the phone draws, not by how wide the window is. The screen now turns off after 60 s: draw fell from about 1.4 W to about 0.35 W, which is about 0.7 full cycles a day instead of 2. A thermal BCCT current limit (`/proc/driver/thermal/clbcct`) was tested as a power-path hold, but the thermal governor resets it within a second.
 - **SSH**: `ssh -p 8022 192.168.43.247` (Termux, key auth).
 

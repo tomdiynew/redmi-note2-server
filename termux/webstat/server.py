@@ -4,6 +4,10 @@
 GET /             dashboard page
 GET /api/status   current readings (JSON)
 GET /api/history  last 24h of 1-minute samples (JSON)
+GET /api/news/days  one entry per day (ok / partial / error / pending / missing)
+GET /news/<date>.html  that day's stand-alone news page; batches are fetched
+                  from each country's own outlets every day at 07:00 local time into ~/news/
+                  (non-Chinese headlines get a Chinese machine translation)
 GET /api/markets  index / commodity quotes from Sina (cached 30s) and
                   Brazilian beef/soy from CEPEA (daily, cached 1h) (JSON)
 
@@ -251,6 +255,237 @@ def markets():
         return {"time": int(_markets["ts"]), "groups": _markets["data"] or [], "error": _markets.get("error")}
 
 
+# ---- daily news: each country's own outlets (major Western ones for world news),
+# NEWS_PER_GROUP headlines per group taken in turn from its sources; every
+# non-Chinese headline also gets an automatic Chinese translation.
+NEWS_FEEDS = [  # (group, [(source, rss url, language)])
+    ("世界", [("BBC", "https://feeds.bbci.co.uk/news/world/rss.xml", "en"),
+              ("The Guardian", "https://www.theguardian.com/world/rss", "en"),
+              ("The New York Times", "https://rss.nytimes.com/services/xml/rss/nyt/World.xml", "en")]),
+    ("中国", [("中国新闻网", "https://www.chinanews.com.cn/rss/scroll-news.xml", "zh"),
+              ("人民网", "http://www.people.com.cn/rss/politics.xml", "zh")]),
+    ("韩国", [("연합뉴스", "https://www.yna.co.kr/rss/news.xml", "ko")]),
+    ("日本", [("NHK", "https://www3.nhk.or.jp/rss/news/cat0.xml", "ja"),
+              ("朝日新聞", "https://www.asahi.com/rss/asahi/newsheadlines.rdf", "ja")]),
+    ("越南", [("VnExpress", "https://vnexpress.net/rss/tin-moi-nhat.rss", "vi"),
+              ("Tuổi Trẻ", "https://tuoitre.vn/rss/tin-moi-nhat.rss", "vi")]),
+    ("欧洲", [("DW", "https://rss.dw.com/rdf/rss-en-eu", "en"),
+              ("Le Monde", "https://www.lemonde.fr/international/rss_full.xml", "fr"),
+              ("Der Spiegel", "https://www.spiegel.de/international/index.rss", "en")]),
+]
+NEWS_PER_GROUP = 20
+NEWS_HOUR = 7
+NEWS_DIR = os.path.join(os.path.expanduser("~"), "news")   # <date>.html, <date>.json, index.json
+NEWS_INDEX = os.path.join(NEWS_DIR, "index.json")
+_news_lock = threading.Lock()
+
+
+def _local(tag):
+    return tag.rsplit("}", 1)[-1]
+
+
+def fetch_feed(url, limit):
+    """RSS 2.0, RSS 1.0 (RDF) and Atom -> [{title, link, time}]"""
+    import xml.etree.ElementTree as ET
+    from email.utils import parsedate_to_datetime
+    raw = urlopen(Request(url, headers={"User-Agent": "Mozilla/5.0"}), timeout=20).read()
+    out, seen = [], set()
+    for it in ET.fromstring(raw).iter():
+        if _local(it.tag) not in ("item", "entry"):
+            continue
+        f = {_local(c.tag): c for c in it}
+        title = " ".join((f["title"].text or "").split()) if "title" in f else ""
+        link = (f["link"].text or f["link"].get("href") or "").strip() if "link" in f else ""
+        if not title or title in seen:
+            continue
+        seen.add(title)
+        ts = None
+        for k in ("pubDate", "date", "published", "updated"):
+            if k in f and f[k].text:
+                try:
+                    ts = int(parsedate_to_datetime(f[k].text).timestamp())
+                except Exception:
+                    try:
+                        from datetime import datetime
+                        ts = int(datetime.fromisoformat(f[k].text.strip().replace("Z", "+00:00")).timestamp())
+                    except Exception:
+                        pass
+                break
+        out.append({"title": title, "link": link, "time": ts})
+        if len(out) >= limit:
+            break
+    return out
+
+
+def translate_zh(lines, lang):
+    """Google Translate's keyless endpoint; one line per headline, batches of 10."""
+    import urllib.parse
+    out = []
+    for i in range(0, len(lines), 10):
+        chunk = lines[i:i + 10]
+        body = urllib.parse.urlencode({"q": "\n".join(chunk)}).encode()
+        url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl={lang}&tl=zh-CN&dt=t"
+        d = json.loads(urlopen(Request(url, data=body, headers={"User-Agent": "Mozilla/5.0"}), timeout=20).read())
+        res = "".join(seg[0] for seg in d[0] if seg[0]).split("\n")
+        out += res if len(res) == len(chunk) else [None] * len(chunk)   # misaligned -> skip
+    return out
+
+
+def fetch_news_group(sources):
+    """Headlines from every source of a group, interleaved, with Chinese translations."""
+    per_src, errors = [], []
+    for name, url, lang in sources:
+        try:
+            items = fetch_feed(url, NEWS_PER_GROUP)
+        except Exception as e:
+            errors.append(f"{name}: {e}"); continue
+        for i in items:
+            i.update(source=name, lang=lang, title_zh=None)
+        per_src.append(items)
+    picked = []
+    while len(picked) < NEWS_PER_GROUP and any(per_src):
+        for items in per_src:
+            if items and len(picked) < NEWS_PER_GROUP:
+                picked.append(items.pop(0))
+    for lang in {i["lang"] for i in picked if i["lang"] != "zh"}:
+        todo = [i for i in picked if i["lang"] == lang]
+        try:
+            for i, zh in zip(todo, translate_zh([i["title"] for i in todo], lang)):
+                i["title_zh"] = zh
+        except Exception as e:
+            errors.append(f"翻译({lang}): {e}")
+    if not picked and errors:
+        raise RuntimeError("; ".join(errors))
+    return picked, errors
+
+
+def _news_index():
+    try:
+        with open(NEWS_INDEX) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def _write(path, text):
+    with open(path + ".tmp", "w", encoding="utf-8") as f:
+        f.write(text)
+    os.replace(path + ".tmp", path)
+
+
+def news_day_html(day, data):
+    """Stand-alone page for one day's batch (also readable on its own)."""
+    e = html.escape
+    fmt = lambda ts: time.strftime("%m-%d %H:%M", time.localtime(ts)) if ts else ""
+    cards = []
+    for g in data["groups"]:
+        if g["items"]:
+            lis = "".join(f'<li><a href="{e(i["link"])}" target="_blank" rel="noopener">{e(i["title"])}</a>'
+                          + (f'<div class="zh">{e(i["title_zh"])}</div>' if i.get("title_zh") else "")
+                          + f'<div class="n">{e(i["source"])}{" · " + fmt(i["time"]) if i["time"] else ""}</div></li>'
+                          for i in g["items"])
+            body = f"<ol>{lis}</ol>" + (f'<div class="n err">{e(g["error"])}</div>' if g.get("error") else "")
+        else:
+            body = f'<div class="err">抓取失败：{e(g.get("error") or "无数据")}</div>'
+        src = " · ".join(g.get("sources") or [])
+        cards.append(f'<section><h2>{e(g["title"])} · {len(g["items"])} 条</h2><div class="n">{e(src)}</div>{body}</section>')
+    return f"""<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>每日新闻 {day}</title>
+<style>
+:root {{ --bg:#0f1115; --card:#181b22; --fg:#e6e8ee; --muted:#8b93a7; --line:#262b36; --accent:#ff5a4f; }}
+body {{ margin:0; background:var(--bg); color:var(--fg); font:15px/1.5 -apple-system,"PingFang SC","Noto Sans CJK SC",sans-serif; }}
+.wrap {{ max-width:1100px; margin:0 auto; padding:20px 16px 40px; }}
+h1 {{ font-size:22px; margin:0 0 4px; }} h1 span {{ color:var(--accent); }}
+.meta {{ color:var(--muted); font-size:13px; margin-bottom:16px; }} .meta a {{ color:var(--muted); }}
+.grid {{ display:grid; gap:14px; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); }}
+section {{ background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px 16px; }}
+h2 {{ font-size:16px; margin:0 0 8px; }}
+ol {{ margin:0; padding-left:22px; }} li {{ padding:6px 0; border-top:1px solid var(--line); }} li:first-child {{ border-top:0; }}
+a {{ color:inherit; text-decoration:none; }} a:hover {{ text-decoration:underline; }}
+.n {{ color:var(--muted); font-size:12px; }} .err {{ color:var(--accent); }}
+.zh {{ color:#c9cfdc; font-size:14px; margin-top:2px; }}
+</style></head><body><div class="wrap">
+<h1>每日新闻 <span>{day}</span></h1>
+<div class="meta">抓取于 {time.strftime("%Y-%m-%d %H:%M", time.localtime(data["time"]))} · 各国本地媒体原文 + 中文机器翻译 · <a href="/#news">返回日期列表</a></div>
+<div class="grid">{"".join(cards)}</div></div></body></html>"""
+
+
+def fetch_news(day=None):
+    """Fetch every group, save <day>.json/.html and record the day's status in index.json."""
+    day = day or time.strftime("%Y-%m-%d")
+    groups, errors = [], []
+    for name, sources in NEWS_FEEDS:
+        try:
+            items, errs = fetch_news_group(sources)
+            groups.append({"title": name, "sources": [n for n, _, _ in sources], "items": items,
+                           "error": "; ".join(errs) or None})
+            errors += [f"{name} {x}" for x in errs]
+        except Exception as e:  # keep the other groups
+            groups.append({"title": name, "items": [], "error": str(e)}); errors.append(f"{name}: {e}")
+    data = {"date": day, "time": int(time.time()), "groups": groups}
+    count = sum(len(g["items"]) for g in groups)
+    with _news_lock:
+        os.makedirs(NEWS_DIR, exist_ok=True)
+        idx = _news_index()
+        if count:
+            _write(os.path.join(NEWS_DIR, day + ".json"), json.dumps(data, ensure_ascii=False))
+            _write(os.path.join(NEWS_DIR, day + ".html"), news_day_html(day, data))
+            idx[day] = {"status": "partial" if errors else "ok", "time": data["time"], "count": count,
+                        "error": "; ".join(errors) or None}
+        elif not (idx.get(day, {}).get("status") in ("ok", "partial")):   # never overwrite a good batch
+            idx[day] = {"status": "error", "time": data["time"], "count": 0, "error": "; ".join(errors) or "无数据"}
+        _write(NEWS_INDEX, json.dumps(idx, ensure_ascii=False, indent=1))
+    return count
+
+
+def news_days():
+    """Every day from the first batch until today, newest first, with its status."""
+    with _news_lock:
+        idx = _news_index()
+    now = time.time(); lt = time.localtime(now)
+    today = time.strftime("%Y-%m-%d", lt)
+    first = min(list(idx) + [today])
+    days, t = [], time.mktime(time.strptime(today, "%Y-%m-%d")) + 12 * 3600
+    while True:
+        d = time.strftime("%Y-%m-%d", time.localtime(t))
+        if d < first:
+            break
+        e = dict(idx.get(d) or {})
+        if not e:
+            if d == today and lt.tm_hour < NEWS_HOUR:
+                e = {"status": "pending", "error": f"未到 {NEWS_HOUR}:00，尚未生成"}
+            elif d == today:
+                e = {"status": "pending", "error": "还没生成（抓取中或正在重试）"}
+            else:
+                e = {"status": "missing", "error": "当天没有生成（可能关机或断网）"}
+        e["date"] = d
+        if e.get("status") in ("ok", "partial"):
+            e["url"] = f"/news/{d}.html"
+        days.append(e)
+        t -= 86400
+    return {"today": today, "hour": NEWS_HOUR, "days": days}
+
+
+def news_loop():
+    """Fetch at 07:00 local time every day (and at start if today's 07:00 batch is missing)."""
+    # the dashboard is started without Termux's login env: take the phone's time zone
+    tz = getprop("persist.sys.timezone")
+    if tz:
+        os.environ["TZ"] = tz; time.tzset()
+    while True:
+        now = time.time(); lt = time.localtime(now)
+        today7 = time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday, NEWS_HOUR, 0, 0, 0, 0, -1))
+        if now >= today7:
+            day = time.strftime("%Y-%m-%d", lt)
+            if _news_index().get(day, {}).get("status") not in ("ok", "partial"):
+                for attempt in range(6):                       # retry for ~30 min if offline
+                    if fetch_news(day):
+                        break
+                    time.sleep(300)
+        nxt = today7 + 86400 if now >= today7 else today7
+        time.sleep(max(60, nxt - time.time()))
+
+
 def status():
     up = float(read("/proc/uptime", "0").split()[0])
     mem = {}
@@ -346,6 +581,15 @@ class Handler(BaseHTTPRequestHandler):
             with sampler.lock:
                 data = list(sampler.history)
             self._send(200, json.dumps(data).encode(), "application/json")
+        elif path == "/api/news/days":
+            self._send(200, json.dumps(news_days(), ensure_ascii=False).encode(), "application/json; charset=utf-8")
+        elif re.fullmatch(r"/news/\d{4}-\d{2}-\d{2}\.html", path):
+            f = os.path.join(NEWS_DIR, os.path.basename(path))
+            if os.path.exists(f):
+                with open(f, "rb") as fh:
+                    self._send(200, fh.read(), "text/html; charset=utf-8")
+            else:
+                self._send(404, "这一天的新闻还没生成".encode(), "text/plain; charset=utf-8")
         elif path == "/api/markets":
             self._send(200, json.dumps(markets(), ensure_ascii=False).encode(), "application/json; charset=utf-8")
         elif path in ("/", "/index.html"):
@@ -361,5 +605,6 @@ class Handler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     threading.Thread(target=tick_loop, daemon=True).start()
     threading.Thread(target=history_loop, daemon=True).start()
+    threading.Thread(target=news_loop, daemon=True).start()
     print(f"webstat listening on 0.0.0.0:{PORT}", flush=True)
     ThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
