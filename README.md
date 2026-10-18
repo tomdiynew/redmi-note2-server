@@ -18,6 +18,37 @@ Dashboard on a phone: <img src="docs/img/dashboard-mobile.jpg" width="160">
 
 **Full step-by-step guide (Chinese, commands explained):** [docs/build-guide.html](docs/build-guide.html)
 
+## Boot styles
+
+Two boot styles so far. Check out the listed commits to see (or rebuild) each one.
+
+### v2 "LOADING" (2026-10-17)
+
+| | |
+|---|---|
+| First screen (logo partition) | `assets/images/boot-logo-v2-android.png`, 64 colours |
+| Boot animation | `assets/images/bootanim-v2-portrait.png` + red LOADING progress bar (9 s) + `assets/audio/phone_boot.mp3` (11 s), 5 fps |
+| Termux boot intro | typed commands, AI endpoint handshakes, status board; neofetch's stock Android logo |
+| Commits | `3d08bbd` logo / boot-animation tools · `15cc746` progress-bar animation + boot intro · `def82f2` the v2 pictures and sound |
+
+### v3 "接班人" (2026-10-18)
+
+| First screen | Boot animation | Intro start | Intro end |
+|---|---|---|---|
+| <img src="assets/images/boot-logo-v3-jiebanren.png" width="150"> | <img src="docs/img/bootanim-v3.jpg" width="150"> | <img src="docs/img/intro-v3-start.jpg" width="150"> | <img src="docs/img/intro-v3-end.jpg" width="150"> |
+
+| | |
+|---|---|
+| First screen (logo partition) | `assets/images/boot-logo-v3-jiebanren.png`, 48 colours (1.75 MB; stock is 1.85 MB) |
+| Boot animation | `assets/video/bootanim-v3-salute.mp4` (10 s, 30 fps) played together with a 10 s sound clip. The frames are 540×960 and stretched to full screen: at 1080×1920 the phone decodes only ~11 fps, so video and sound drifted apart. Built by `tools/build_bootanim_video.sh` |
+| Termux | original saluting robot (red scarf) above neofetch's info and centred at the end; red ▼ before every prompt; red/gold colours |
+| System theme | "Pioneer" wallpaper + 17 app icons (see below) |
+| Commits | `68193ad` system theme · `90621a6` video boot-animation tool · `297e98e` logo, video, Termux look |
+
+| Home | App drawer |
+|---|---|
+| <img src="docs/img/theme-v3-home.jpg" width="180"> | <img src="docs/img/theme-v3-drawer.jpg" width="180"> |
+
 ## Layout
 
 ```
@@ -26,7 +57,10 @@ system/phonectl.rc     init service definition (/system/etc/init)
 termux/webstat/        dashboard (Python stdlib server + one HTML page)
 system/termux-services* init-supervised sshd + dashboard (as the Termux uid), survives app kills
 tools/build_logo.py    custom first boot screen -> logo partition image
-tools/build_bootanim.sh  progress-bar boot animation (+ optional sound)
+tools/build_bootanim.sh  progress-bar boot animation (+ optional sound)          [v2]
+tools/build_bootanim_video.sh  video + sound boot animation                       [v3]
+tools/theme/           Pioneer system theme (overlays), robot pixel art
+tools/render_bigtext.py  big block letters for an optional boot-intro finale
 docs/build-guide.html  full flashing + setup guide
 deploy.sh              system | web | all | status
 ```
