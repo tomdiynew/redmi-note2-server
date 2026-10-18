@@ -37,6 +37,20 @@ web() {
   scp -q -P 8022 termux/bin/boot-intro "$PHONE":bin/
   scp -q -P 8022 termux/dot-termux/termux.properties "$PHONE":.termux/termux.properties
   "${SSH[@]}" 'chmod 700 ~/bin/boot-intro; rm -f ~/bin/rain.py'
+  # Pioneer look: robot logo for neofetch, Termux colours, red-scarf prompt in every shell
+  "${SSH[@]}" 'mkdir -p ~/.config/neofetch'
+  scp -q -P 8022 termux/neofetch/robot.ans "$PHONE":.config/neofetch/robot.ans
+  scp -q -P 8022 termux/dot-termux/colors.properties "$PHONE":.termux/colors.properties
+  "${SSH[@]}" 'grep -q "pioneer-prompt" ~/.bashrc 2>/dev/null || cat >> ~/.bashrc <<"RC"
+# pioneer-prompt: red scarf in front of the prompt
+PS1="\[\e[1;31m\]▼\[\e[0m\] \[\e[1;32m\]\u@\h\[\e[0m\]:\[\e[1;33m\]\w\[\e[0m\]\$ "
+RC
+termux-reload-settings 2>/dev/null || true'
+  # optional finale text (your own file, not in git) -> big block letters
+  if [ -f termux/boot-lyrics.txt ]; then
+    python3 tools/render_bigtext.py termux/boot-lyrics.txt termux/boot-lyrics.ans
+    scp -q -P 8022 termux/boot-lyrics.ans "$PHONE":.boot-lyrics.ans
+  fi
   if [ -f termux/frpc/frpc.toml ]; then
     scp -q -P 8022 termux/frpc/frpc.toml "$PHONE":.frpc.toml
     "${SSH[@]}" 'chmod 600 ~/.frpc.toml; command -v frpc >/dev/null || pkg install -y frp; pkill -f "bin/[f]rpc " || true'

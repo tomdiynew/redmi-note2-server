@@ -6,7 +6,9 @@
 #  3. prints a live status board, then leaves an interactive shell
 
 case $(getprop ro.product.device) in taimen) HOSTNAME_=pixel ;; *) HOSTNAME_=redmi ;; esac
-PROMPT=$'\033[1;32m'"laohan@$HOSTNAME_"$'\033[0m:\033[1;34m~\033[0m$ '
+# red-scarf mark in front of every prompt (Pioneer theme)
+SCARF=$'\033[1;31m▼\033[0m '
+PROMPT="$SCARF"$'\033[1;32m'"laohan@$HOSTNAME_"$'\033[0m:\033[1;33m~\033[0m$ '
 G=$'\033[1;32m' R=$'\033[1;31m' Y=$'\033[1;33m' C=$'\033[1;36m' D=$'\033[2m' W=$'\033[1;37m' N=$'\033[0m'
 FAILS=0
 
@@ -48,6 +50,14 @@ row() {  # label detail healthy(0/1) [bad-text]
 }
 
 clear
+# our own logo (a little green robot in a red scarf, saluting) above neofetch's info
+ROBOT=~/.config/neofetch/robot.ans
+robot() {  # [left padding]
+  [ -f $ROBOT ] || return
+  sed "s/^/$(printf '%*s' "${1:-0}" '')/" $ROBOT; printf '\033[0m\n'
+}
+# typed as plain "neofetch"; shows the robot, then neofetch's info without its logo
+[ -f $ROBOT ] && neofetch() { robot 2; command neofetch --off --colors 1 3 7 1 3 7; }
 run "neofetch" 1.2
 run "uptime"
 run "ping -c 3 223.5.5.5"
@@ -93,5 +103,21 @@ else
   printf '  %s▶ %d 项异常，请检查%s\n' "$R" "$FAILS" "$N"
 fi
 printf '  %s%s · 已运行 %s%s\n\n  %s青岛老汉的小服务器%s\n\n' "$D" "${ip:-?}" "${up:-?}" "$N" "$W" "$N"
+
+# ---- finale: ~/.boot-lyrics.ans (rendered from your own text by
+# tools/render_bigtext.py), printed block by block in big red/gold letters
+if [ -s ~/.boot-lyrics.ans ]; then
+  sleep 0.8; i=0
+  while IFS= read -r -d $'\f' block; do
+    c=$([ $((i % 2)) -eq 0 ] && echo "$R" || echo "$Y")
+    printf '%s%s%s\n' "$c" "${block#$'\n'}" "$N"
+    sleep 1.4; i=$((i + 1))
+  done < <(cat ~/.boot-lyrics.ans; printf '\f')
+  printf '\n'
+fi
+
+# ---- closing: the saluting robot, centred, then a fresh prompt waiting for input
+cols=$(tput cols 2>/dev/null || echo 50)
+robot $(( cols > 30 ? (cols - 30) / 2 : 0 ))
 
 PS1="$PROMPT" exec bash --norc -i

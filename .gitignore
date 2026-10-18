@@ -7,3 +7,6 @@
 __pycache__/
 termux/frpc/frpc.toml
 theme/out/
+# user-supplied text for the boot intro finale (not in git)
+termux/boot-lyrics.txt
+termux/boot-lyrics.ans
