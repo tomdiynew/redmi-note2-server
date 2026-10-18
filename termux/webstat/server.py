@@ -129,6 +129,9 @@ class Sampler:
 
 
 sampler = Sampler()
+# Site-name prefix, so the same code labels each phone's site ("Pixel 老汉移动信息网")
+SITE = os.environ.get("WEBSTAT_SITE") or ("Pixel" if "Pixel" in getprop("ro.product.model") else "Redmi")
+
 STATIC = {"model": getprop("ro.product.model"), "android": getprop("ro.build.version.release"),
           "rom": getprop("ro.lineage.version") or getprop("ro.cm.version") or getprop("ro.build.display.id"),
           "kernel": os.uname().release, "arch": os.uname().machine}
@@ -594,7 +597,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, json.dumps(markets(), ensure_ascii=False).encode(), "application/json; charset=utf-8")
         elif path in ("/", "/index.html"):
             with open(os.path.join(HERE, "index.html"), "rb") as f:
-                self._send(200, f.read(), "text/html; charset=utf-8")
+                self._send(200, f.read().replace(b"__SITE__", SITE.encode()), "text/html; charset=utf-8")
         else:
             self._send(404, b"not found", "text/plain")
 
