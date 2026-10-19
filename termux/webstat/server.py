@@ -142,7 +142,8 @@ MARKETS = [
     # US stocks after the indices: the "unit" is the ticker, which also names the icon in icons/
     ("美股", [("gb_$dji", ""), ("gb_$inx", ""), ("gb_$ixic", ""),
              ("gb_spcx", "SPCX"), ("gb_ame", "AME"), ("gb_amd", "AMD"), ("gb_nvda", "NVDA"),
-             ("gb_intc", "INTC"), ("gb_tsla", "TSLA"), ("gb_aapl", "AAPL")]),
+             ("gb_intc", "INTC"), ("gb_tsla", "TSLA"), ("gb_aapl", "AAPL"), ("gb_msft", "MSFT"),
+             ("gb_googl", "GOOGL")]),
     ("A 股", [("sh000001", ""), ("sz399001", ""), ("sz399006", ""), ("sh000300", "")]),
     ("港股", [("hkHSI", ""), ("hkHSTECH", ""), ("hkHSCEI", "")]),
     ("贵金属", [("hf_XAU", "美元/盎司"), ("hf_XAG", "美元/盎司"), ("hf_GC", "美元/盎司"), ("hf_SI", "美元/盎司"),
@@ -286,9 +287,9 @@ def market_group(i):
 
 # ---- watched US stocks on the info page: (sina code, ticker)
 WATCH = [("gb_spcx", "SPCX"), ("gb_ame", "AME"), ("gb_amd", "AMD"), ("gb_nvda", "NVDA"), ("gb_intc", "INTC"),
-         ("gb_tsla", "TSLA"), ("gb_aapl", "AAPL")]
+         ("gb_tsla", "TSLA"), ("gb_aapl", "AAPL"), ("gb_msft", "MSFT"), ("gb_googl", "GOOGL")]
 WATCH_NAMES = {"gb_spcx": "SpaceX", "gb_ame": "AMETEK", "gb_amd": "AMD", "gb_nvda": "NVIDIA", "gb_intc": "Intel",
-               "gb_tsla": "Tesla", "gb_aapl": "Apple"}
+               "gb_tsla": "Tesla", "gb_aapl": "Apple", "gb_msft": "Microsoft", "gb_googl": "Google"}
 
 
 def fetch_watch():
