@@ -139,9 +139,10 @@ STATIC = {"model": getprop("ro.product.model"), "android": getprop("ro.build.ver
 
 # (group, [(sina code, unit)]); Sina supplies the Chinese names
 MARKETS = [
-    ("美股", [("gb_$dji", ""), ("gb_$inx", ""), ("gb_$ixic", "")]),
-    ("美股个股", [("gb_spcx", "SPCX"), ("gb_ame", "AME"), ("gb_amd", "AMD"), ("gb_nvda", "NVDA"),
-                ("gb_intc", "INTC"), ("gb_tsla", "TSLA"), ("gb_aapl", "AAPL")]),
+    # US stocks after the indices: the "unit" is the ticker, which also names the icon in icons/
+    ("美股", [("gb_$dji", ""), ("gb_$inx", ""), ("gb_$ixic", ""),
+             ("gb_spcx", "SPCX"), ("gb_ame", "AME"), ("gb_amd", "AMD"), ("gb_nvda", "NVDA"),
+             ("gb_intc", "INTC"), ("gb_tsla", "TSLA"), ("gb_aapl", "AAPL")]),
     ("A 股", [("sh000001", ""), ("sz399001", ""), ("sz399006", ""), ("sh000300", "")]),
     ("港股", [("hkHSI", ""), ("hkHSTECH", ""), ("hkHSCEI", "")]),
     ("贵金属", [("hf_XAU", "美元/盎司"), ("hf_XAG", "美元/盎司"), ("hf_GC", "美元/盎司"), ("hf_SI", "美元/盎司"),
@@ -240,6 +241,8 @@ def fetch_market_group(items):
                "chg": chg, "pct": chg / prev * 100 if chg is not None else None,
                "unit": unit, "time": qt}
         f = raw.get(code)
+        if code.startswith("gb_") and not code.startswith("gb_$"):
+            row["icon"] = unit if os.path.exists(os.path.join(HERE, "icons", unit + ".svg")) else None
         if code.startswith("gb_") and not code.startswith("gb_$") and f and len(f) > 24:
             ext = _f(f[21])   # latest pre-market (AM) or after-hours (PM) trade
             if ext and ext != price:
@@ -694,6 +697,9 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/watch":
             c = _watch.get() if WATCH else {"time": int(time.time()), "data": [], "error": None}
             self._json({"time": c["time"], "items": c["data"] or [], "error": c["error"], "session": us_session()})
+        elif re.fullmatch(r"/icons/[A-Z]+\.svg", path) and os.path.exists(os.path.join(HERE, path[1:])):
+            with open(os.path.join(HERE, path[1:]), "rb") as f:
+                self._send(200, f.read(), "image/svg+xml")
         elif path in ("/", "/index.html"):
             with open(os.path.join(HERE, "index.html"), "rb") as f:
                 self._send(200, f.read().replace(b"__SITE__", SITE.encode())

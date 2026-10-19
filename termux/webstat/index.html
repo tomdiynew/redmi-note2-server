@@ -74,7 +74,11 @@
   .mkt td { padding: 7px 0; border-top: 1px solid var(--line); vertical-align: top; }
   .mkt tr:first-child td { border-top: 0; }
   .mkt td.n { text-align: right; white-space: nowrap; padding-left: 10px; }
-  .mkt .name { font-weight: 600; }
+  .mkt .name { font-weight: 600; display: flex; align-items: center; gap: 7px; }
+  .mkt .ico { width: 22px; height: 22px; padding: 3px; border-radius: 6px; background: #fff;
+              border: 1px solid var(--line); flex: none; }
+  .mkt .note.ind { padding-left: 29px; }
+  .mkt tr.sep td { border-top: 2px solid var(--line); padding-top: 10px; }
   .mkt .note { color: var(--muted); font-size: 12px; }
   .mkt .price { font-size: 16px; font-weight: 600; }
   /* per-card loading: each card shows a spinner until its own data arrives */
@@ -321,7 +325,8 @@ async function marketGroup(i) {
   try {
     const g = await (await fetch('/api/markets/' + i, {cache: 'no-store'})).json();
     const body = g.items.length ? `<table>${g.items.map(q => { const c = updown(q.chg), sg = sign(q.chg);
-        return `<tr><td><div class="name">${q.name}</div><div class="note">${q.unit ? q.unit + ' · ' : ''}${q.time}</div></td>
+        const ico = q.icon ? `<img class="ico" src="/icons/${q.icon}.svg" alt="">` : '';
+        return `<tr${q.icon && !g.items[g.items.indexOf(q) - 1]?.icon ? ' class="sep"' : ''}><td><div class="name">${ico}${q.name}</div><div class="note${ico ? ' ind' : ''}">${q.unit ? q.unit + ' · ' : ''}${q.time}</div></td>
           <td class="n"><div class="price ${c}">${fmtNum(q.price)}</div>
           <div class="note ${c}">${sg}${fmtNum(q.chg)} · ${q.pct == null ? '–' : sg + q.pct.toFixed(2) + '%'}</div>${q.ext_price ? `
           <div class="note ${updown(q.ext_chg)}">${q.ext_kind} ${fmtNum(q.ext_price)} · ${sign(q.ext_pct)}${q.ext_pct.toFixed(2)}%</div>` : ''}</td></tr>`; }).join('')}</table>`
