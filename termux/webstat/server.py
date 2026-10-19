@@ -140,6 +140,8 @@ STATIC = {"model": getprop("ro.product.model"), "android": getprop("ro.build.ver
 # (group, [(sina code, unit)]); Sina supplies the Chinese names
 MARKETS = [
     ("美股", [("gb_$dji", ""), ("gb_$inx", ""), ("gb_$ixic", "")]),
+    ("美股个股", [("gb_spcx", "SPCX"), ("gb_ame", "AME"), ("gb_amd", "AMD"), ("gb_nvda", "NVDA"),
+                ("gb_intc", "INTC"), ("gb_tsla", "TSLA"), ("gb_aapl", "AAPL")]),
     ("A 股", [("sh000001", ""), ("sz399001", ""), ("sz399006", ""), ("sh000300", "")]),
     ("港股", [("hkHSI", ""), ("hkHSTECH", ""), ("hkHSCEI", "")]),
     ("贵金属", [("hf_XAU", "美元/盎司"), ("hf_XAG", "美元/盎司"), ("hf_GC", "美元/盎司"), ("hf_SI", "美元/盎司"),
@@ -234,9 +236,17 @@ def fetch_market_group(items):
             continue
         name, price, prev, high, low, qt = q
         chg = price - prev if prev else None
-        rows.append({"code": code, "name": name, "price": price, "prev": prev, "high": high, "low": low,
-                     "chg": chg, "pct": chg / prev * 100 if chg is not None else None,
-                     "unit": unit, "time": qt})
+        row = {"code": code, "name": name, "price": price, "prev": prev, "high": high, "low": low,
+               "chg": chg, "pct": chg / prev * 100 if chg is not None else None,
+               "unit": unit, "time": qt}
+        f = raw.get(code)
+        if code.startswith("gb_") and not code.startswith("gb_$") and f and len(f) > 24:
+            ext = _f(f[21])   # latest pre-market (AM) or after-hours (PM) trade
+            if ext and ext != price:
+                row.update(ext_price=ext, ext_chg=ext - price, ext_pct=_f(f[22]),
+                           ext_kind="盘前" if f[24][-6:-4] == "AM" else "盘后",
+                           ext_time=f[24].replace(" EDT", "").replace(" EST", ""))
+        rows.append(row)
     return rows
 
 
@@ -265,7 +275,10 @@ _market_groups = [Cached(lambda items=items: fetch_market_group(items), MARKET_T
 
 def market_group(i):
     c = _market_groups[i].get()
-    return {"title": MARKETS[i][0], "items": c["data"] or [], "time": c["time"], "error": c["error"]}
+    out = {"title": MARKETS[i][0], "items": c["data"] or [], "time": c["time"], "error": c["error"]}
+    if any(code.startswith("gb_") for code, _ in MARKETS[i][1]):
+        out["session"] = us_session()
+    return out
 
 
 # ---- watched US stocks on the info page: (sina code, ticker)

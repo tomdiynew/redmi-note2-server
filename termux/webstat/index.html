@@ -323,9 +323,12 @@ async function marketGroup(i) {
     const body = g.items.length ? `<table>${g.items.map(q => { const c = updown(q.chg), sg = sign(q.chg);
         return `<tr><td><div class="name">${q.name}</div><div class="note">${q.unit ? q.unit + ' · ' : ''}${q.time}</div></td>
           <td class="n"><div class="price ${c}">${fmtNum(q.price)}</div>
-          <div class="note ${c}">${sg}${fmtNum(q.chg)} · ${q.pct == null ? '–' : sg + q.pct.toFixed(2) + '%'}</div></td></tr>`; }).join('')}</table>`
+          <div class="note ${c}">${sg}${fmtNum(q.chg)} · ${q.pct == null ? '–' : sg + q.pct.toFixed(2) + '%'}</div>${q.ext_price ? `
+          <div class="note ${updown(q.ext_chg)}">${q.ext_kind} ${fmtNum(q.ext_price)} · ${sign(q.ext_pct)}${q.ext_pct.toFixed(2)}%</div>` : ''}</td></tr>`; }).join('')}</table>`
       : `<div class="sub">暂无数据</div>`;
-    card.innerHTML = `<h2>${g.title}</h2>${body}` +
+    const ss = g.session;
+    card.innerHTML = `<h2>${g.title}${ss ? ` <span class="pill ${ss.state === 'open' ? 'good' : ss.state === 'closed' ? '' : 'warn'}" style="margin-left:6px;letter-spacing:0">${ss.label}</span>` : ''}</h2>` +
+      (ss && ss.state !== 'open' ? `<div class="note" style="margin-bottom:6px">纽约 周${ss.weekday} ${ss.ny_time} · 价格为上一交易日收盘${g.items.some(q => q.ext_price) ? '，下方小字为' + (g.items.find(q => q.ext_price).ext_kind) + '价' : ''}</div>` : '') + body +
       (g.error ? `<div class="cardnote bad">更新失败${g.items.length ? '，显示的是上次数据' : ''}：${esc(g.error)}</div>` : '');
     mktTimes[i] = g.time;
   } catch (e) {
@@ -336,9 +339,11 @@ async function marketGroup(i) {
   if (t) $('mktfoot').textContent = `数据来自新浪财经、CEPEA（巴西，每日收盘） · 每 30 秒刷新 · 红涨绿跌 · 更新于 ${new Date(t*1000).toLocaleTimeString('zh-CN')}`;
 }
 async function markets() {
-  if (!mktGroups) {
-    try { mktGroups = await (await fetch('/api/markets', {cache: 'no-store'})).json(); }
-    catch (e) { $('mkterr').hidden = false; $('mkterr').textContent = '行情加载失败'; return; }
+  let titles;   // re-read every round, so an open tab picks up added groups
+  try { titles = await (await fetch('/api/markets', {cache: 'no-store'})).json(); }
+  catch (e) { if (!mktGroups) { $('mkterr').hidden = false; $('mkterr').textContent = '行情加载失败'; return; } }
+  if (titles && JSON.stringify(titles) !== JSON.stringify(mktGroups)) {
+    mktGroups = titles; mktTimes = {};
     $('mkterr').hidden = true;
     $('mkt').innerHTML = mktGroups.map((t, i) => `<section class="card loading" id="mkt${i}"><h2>${t}</h2><div class="spin"></div></section>`).join('');
   }
