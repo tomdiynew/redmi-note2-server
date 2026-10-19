@@ -154,8 +154,6 @@ CEPEA_NAMES = {"boi-gordo": "巴西肥牛（圣保罗）", "soja": "巴西大豆
 CEPEA_TTL = 3600
 _cepea = {}
 MARKET_TTL = 30
-_markets = {"ts": 0, "data": None}
-_markets_lock = threading.Lock()
 
 
 def _f(x):
@@ -217,45 +215,86 @@ def cepea(slug):
     return c[1] if c else None
 
 
-def fetch_markets():
-    codes = [c for _, items in MARKETS for c, _ in items if not c.startswith("cepea:")]
+def sina(codes):
+    """-> {code: raw field list} for one batch request to Sina's quote API"""
     req = Request("https://hq.sinajs.cn/list=" + ",".join(codes),
                   headers={"Referer": "https://finance.sina.com.cn", "User-Agent": "Mozilla/5.0"})
     with urlopen(req, timeout=8) as r:
         raw = r.read().decode("gbk", "replace")
-    quotes = {m.group(1): parse_sina(m.group(1), m.group(2).split(","))
-              for m in re.finditer(r'hq_str_([^=]+)="([^"]*)"', raw)}
-    for _, items in MARKETS:
-        for code, _ in items:
-            if code.startswith("cepea:"):
-                quotes[code] = cepea(code[6:])
-    groups = []
-    for title, items in MARKETS:
-        rows = []
-        for code, unit in items:
-            q = quotes.get(code)
-            if not q or q[1] is None:
-                continue
-            name, price, prev, high, low, qt = q
-            chg = price - prev if prev else None
-            rows.append({"code": code, "name": name, "price": price, "prev": prev, "high": high, "low": low,
-                         "chg": chg, "pct": chg / prev * 100 if chg is not None else None,
-                         "unit": unit, "time": qt})
-        groups.append({"title": title, "items": rows})
-    return groups
+    return {m.group(1): m.group(2).split(",") for m in re.finditer(r'hq_str_([^=]+)="([^"]*)"', raw) if m.group(2)}
 
 
-def markets():
-    """Shared 30s cache: every viewer polling Sina would swamp the single core."""
-    with _markets_lock:
-        if time.time() - _markets["ts"] > MARKET_TTL:
-            try:
-                _markets["data"] = fetch_markets()
-                _markets["error"] = None
-            except Exception as e:  # keep serving the last good quotes
-                _markets["error"] = str(e)
-            _markets["ts"] = time.time()
-        return {"time": int(_markets["ts"]), "groups": _markets["data"] or [], "error": _markets.get("error")}
+def fetch_market_group(items):
+    codes = [c for c, _ in items if not c.startswith("cepea:")]
+    raw = sina(codes) if codes else {}
+    rows = []
+    for code, unit in items:
+        q = cepea(code[6:]) if code.startswith("cepea:") else (parse_sina(code, raw[code]) if code in raw else None)
+        if not q or q[1] is None:
+            continue
+        name, price, prev, high, low, qt = q
+        chg = price - prev if prev else None
+        rows.append({"code": code, "name": name, "price": price, "prev": prev, "high": high, "low": low,
+                     "chg": chg, "pct": chg / prev * 100 if chg is not None else None,
+                     "unit": unit, "time": qt})
+    return rows
+
+
+class Cached:
+    """Shared TTL cache per data source: every viewer polling upstream would swamp the phone.
+    On failure it keeps serving the last good data along with the error."""
+    def __init__(self, fn, ttl):
+        self.fn, self.ttl, self.ts, self.data, self.error = fn, ttl, 0, None, None
+        self.lock = threading.Lock()
+
+    def get(self):
+        with self.lock:
+            if time.time() - self.ts > self.ttl:
+                try:
+                    self.data, self.error = self.fn(), None
+                except Exception as e:
+                    self.error = str(e)
+                self.ts = time.time()
+            return {"time": int(self.ts), "data": self.data, "error": self.error}
+
+
+# one cache per group, so each card on the page loads on its own (a slow CEPEA
+# no longer holds up the Sina quotes)
+_market_groups = [Cached(lambda items=items: fetch_market_group(items), MARKET_TTL) for _, items in MARKETS]
+
+
+def market_group(i):
+    c = _market_groups[i].get()
+    return {"title": MARKETS[i][0], "items": c["data"] or [], "time": c["time"], "error": c["error"]}
+
+
+# ---- watched US stocks on the info page (Pixel only): (sina code, ticker)
+WATCH = [("gb_spcx", "SPCX"), ("gb_ame", "AME"), ("gb_amd", "AMD"), ("gb_nvda", "NVDA"), ("gb_intc", "INTC")]
+WATCH_NAMES = {"gb_spcx": "SpaceX", "gb_ame": "AMETEK", "gb_amd": "AMD", "gb_nvda": "NVIDIA", "gb_intc": "Intel"}
+if SITE != "Pixel":
+    WATCH = []
+
+
+def fetch_watch():
+    raw = sina([c for c, _ in WATCH])
+    out = []
+    for code, ticker in WATCH:
+        f = raw.get(code)
+        if not f or len(f) < 27:
+            out.append({"code": code, "ticker": ticker, "en": WATCH_NAMES[code], "name": None})
+            continue
+        price, prev = _f(f[1]), _f(f[26])
+        ah = _f(f[21])
+        out.append({"code": code, "ticker": ticker, "en": WATCH_NAMES[code], "name": f[0],
+                    "price": price, "chg": _f(f[4]), "pct": _f(f[2]), "prev": prev, "open": _f(f[5]),
+                    "high": _f(f[6]), "low": _f(f[7]), "high52": _f(f[8]), "low52": _f(f[9]),
+                    "volume": _f(f[10]), "mcap": _f(f[12]), "pe": _f(f[14]),
+                    "ah_price": ah if ah and ah != price else None, "ah_pct": _f(f[22]),
+                    "time": f[25].replace(" EDT", "").replace(" EST", ""), "ah_time": f[24].replace(" EDT", "").replace(" EST", "")})
+    return out
+
+
+_watch = Cached(fetch_watch, MARKET_TTL)
 
 
 # ---- daily news: each country's own outlets (major Western ones for world news),
@@ -576,6 +615,9 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _json(self, obj):
+        self._send(200, json.dumps(obj, ensure_ascii=False).encode(), "application/json; charset=utf-8")
+
     def do_GET(self):
         path = self.path.split("?")[0]
         if path == "/api/status":
@@ -593,11 +635,17 @@ class Handler(BaseHTTPRequestHandler):
                     self._send(200, fh.read(), "text/html; charset=utf-8")
             else:
                 self._send(404, "这一天的新闻还没生成".encode(), "text/plain; charset=utf-8")
-        elif path == "/api/markets":
-            self._send(200, json.dumps(markets(), ensure_ascii=False).encode(), "application/json; charset=utf-8")
+        elif path == "/api/markets":   # the group titles only, so the page can lay out its cards at once
+            self._json([g for g, _ in MARKETS])
+        elif re.fullmatch(r"/api/markets/\d+", path) and int(path.rsplit("/", 1)[1]) < len(MARKETS):
+            self._json(market_group(int(path.rsplit("/", 1)[1])))
+        elif path == "/api/watch":
+            c = _watch.get() if WATCH else {"time": int(time.time()), "data": [], "error": None}
+            self._json({"time": c["time"], "items": c["data"] or [], "error": c["error"]})
         elif path in ("/", "/index.html"):
             with open(os.path.join(HERE, "index.html"), "rb") as f:
-                self._send(200, f.read().replace(b"__SITE__", SITE.encode()), "text/html; charset=utf-8")
+                self._send(200, f.read().replace(b"__SITE__", SITE.encode())
+                           .replace(b"__WATCH__", json.dumps([[t, WATCH_NAMES[c]] for c, t in WATCH]).encode()), "text/html; charset=utf-8")
         else:
             self._send(404, b"not found", "text/plain")
 

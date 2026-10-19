@@ -77,6 +77,17 @@
   .mkt .name { font-weight: 600; }
   .mkt .note { color: var(--muted); font-size: 12px; }
   .mkt .price { font-size: 16px; font-weight: 600; }
+  /* per-card loading: each card shows a spinner until its own data arrives */
+  .spin { width: 28px; height: 28px; margin: 22px auto; border-radius: 50%;
+          border: 3px solid var(--line); border-top-color: var(--accent); animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .card.loading > :not(:first-child):not(.spin) { display: none; }
+  .card:not(.loading) > .spin { display: none; }
+  .card .cardnote { color: var(--muted); font-size: 12px; margin-top: 10px; }
+  .card .cardnote.bad { color: var(--bad); }
+  .stocks-title { font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: 1px; margin: 18px 0 10px; }
+  .stk .big { font-size: 28px; }
+  .stk .big.up, .stk .sub.up { color: var(--accent); } .stk .big.down, .stk .sub.down { color: var(--good); }
   /* news page */
   .news ol { margin: 0; padding-left: 22px; }
   .news li { padding: 6px 0; border-top: 1px solid var(--line); line-height: 1.45; }
@@ -111,8 +122,8 @@
 
   <div id="page-info">
   <div class="grid">
-    <section class="card">
-      <h2>电池</h2>
+    <section class="card loading" data-load="status">
+      <h2>电池</h2><div class="spin"></div>
       <div class="big" id="bat">–<small>%</small></div>
       <div class="sub" id="batstate">–</div>
       <div class="bar"><b id="band"></b><i id="batbar"></i></div>
@@ -125,8 +136,8 @@
       </dl>
     </section>
 
-    <section class="card">
-      <h2>网络</h2>
+    <section class="card loading" data-load="status">
+      <h2>网络</h2><div class="spin"></div>
       <div class="big" id="ssid" style="font-size:26px">–</div>
       <div class="sub" id="signal">–</div>
       <dl>
@@ -138,8 +149,8 @@
       </dl>
     </section>
 
-    <section class="card">
-      <h2>CPU</h2>
+    <section class="card loading" data-load="status">
+      <h2>CPU</h2><div class="spin"></div>
       <div class="big" id="cpu">–<small>%</small></div>
       <div class="sub" id="load">–</div>
       <dl>
@@ -150,8 +161,8 @@
       <dl id="temps" style="margin-top:0"></dl>
     </section>
 
-    <section class="card">
-      <h2>内存 / 存储</h2>
+    <section class="card loading" data-load="status">
+      <h2>内存 / 存储</h2><div class="spin"></div>
       <div class="big" id="mem">–<small>%</small></div>
       <div class="sub" id="memtxt">–</div>
       <div class="bar"><i id="membar"></i></div>
@@ -169,9 +180,14 @@
     </section>
   </div>
 
+  <div id="stocks" hidden>
+    <div class="stocks-title">关注股票 · 美股（美元）</div>
+    <div class="grid" id="stockgrid"></div>
+  </div>
+
   <div class="charts">
-    <section class="card"><h2>电量 · 24 小时</h2><svg id="chbat" viewBox="0 0 600 160" preserveAspectRatio="none"></svg></section>
-    <section class="card"><h2>CPU 温度 · 24 小时</h2><svg id="chtemp" viewBox="0 0 600 160" preserveAspectRatio="none"></svg></section>
+    <section class="card loading" data-load="history"><h2>电量 · 24 小时</h2><div class="spin"></div><svg id="chbat" viewBox="0 0 600 160" preserveAspectRatio="none"></svg></section>
+    <section class="card loading" data-load="history"><h2>CPU 温度 · 24 小时</h2><div class="spin"></div><svg id="chtemp" viewBox="0 0 600 160" preserveAspectRatio="none"></svg></section>
   </div>
 
   <div class="err" id="err" hidden></div>
@@ -179,13 +195,13 @@
   </div>
 
   <div id="page-news" hidden>
-    <section class="card news"><h2>每日新闻 · 按日期</h2><div id="news"><div class="sub">加载中…</div></div></section>
+    <section class="card news"><h2>每日新闻 · 按日期</h2><div id="news"><div class="spin"></div></div></section>
     <div class="err" id="newserr" hidden></div>
     <footer id="newsfoot">每天早上 7:00 自动抓取 · 来源 Google 新闻</footer>
   </div>
 
   <div id="page-markets" hidden>
-    <div class="grid mkt" id="mkt"><section class="card"><h2>行情</h2><div class="sub">加载中…</div></section></div>
+    <div class="grid mkt" id="mkt"><section class="card loading"><h2>行情</h2><div class="spin"></div></section></div>
     <div class="err" id="mkterr" hidden></div>
     <footer id="mktfoot">数据来自新浪财经、CEPEA（巴西，每日收盘） · 每 30 秒刷新 · 红涨绿跌</footer>
   </div>
@@ -268,11 +284,13 @@ function chart(svg, pts, key, lo, hi, band, unit, color) {
   svg.innerHTML = g;
 }
 
+const done = key => document.querySelectorAll(`[data-load="${key}"]`).forEach(c => c.classList.remove('loading'));
 let ctlBand = [50, 60];
 async function tick() {
   try {
     const s = await (await fetch('/api/status', {cache: 'no-store'})).json();
     render(s);
+    done('status');
     if (s.root && s.root.charge_ctl) ctlBand = [s.root.charge_ctl.low, s.root.charge_ctl.high];
   } catch (e) {
     $('dot').className = 'dot off'; $('online').textContent = '离线';
@@ -283,22 +301,81 @@ async function history() {
     const h = await (await fetch('/api/history', {cache: 'no-store'})).json();
     chart($('chbat'), h, 'bat', 0, 100, ctlBand, '%', 'var(--good)');
     chart($('chtemp'), h, 'temp', 20, 80, null, '°', 'var(--accent)');
+    done('history');
   } catch (e) {}
 }
 const fmtNum = v => v == null ? '–' : v.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: Math.abs(v) < 10 ? 4 : 2});
-async function markets() {
+const updown = v => v > 0 ? 'up' : v < 0 ? 'down' : '';
+const sign = v => v > 0 ? '+' : '';
+// markets page: the group titles come first and lay out one card each; every
+// card then loads by itself, so a slow source only keeps its own card spinning
+let mktGroups = null, mktTimes = {};
+async function marketGroup(i) {
+  const card = $('mkt' + i);
   try {
-    const m = await (await fetch('/api/markets', {cache: 'no-store'})).json();
-    if (m.groups.length) $('mkt').innerHTML = m.groups.filter(g => g.items.length).map(g => `<section class="card"><h2>${g.title}</h2><table>${
-      g.items.map(q => { const c = q.chg > 0 ? 'up' : q.chg < 0 ? 'down' : '', sg = q.chg > 0 ? '+' : '';
+    const g = await (await fetch('/api/markets/' + i, {cache: 'no-store'})).json();
+    const body = g.items.length ? `<table>${g.items.map(q => { const c = updown(q.chg), sg = sign(q.chg);
         return `<tr><td><div class="name">${q.name}</div><div class="note">${q.unit ? q.unit + ' · ' : ''}${q.time}</div></td>
           <td class="n"><div class="price ${c}">${fmtNum(q.price)}</div>
-          <div class="note ${c}">${sg}${fmtNum(q.chg)} · ${sg}${q.pct.toFixed(2)}%</div></td></tr>`; }).join('')}</table></section>`).join('');
-    $('mkterr').hidden = !m.error;
-    if (m.error) $('mkterr').textContent = '行情更新失败，显示的是上次数据：' + m.error;
-    $('mktfoot').textContent = `数据来自新浪财经、CEPEA（巴西，每日收盘） · 每 30 秒刷新 · 红涨绿跌 · 更新于 ${new Date(m.time*1000).toLocaleTimeString('zh-CN')}`;
+          <div class="note ${c}">${sg}${fmtNum(q.chg)} · ${q.pct == null ? '–' : sg + q.pct.toFixed(2) + '%'}</div></td></tr>`; }).join('')}</table>`
+      : `<div class="sub">暂无数据</div>`;
+    card.innerHTML = `<h2>${g.title}</h2>${body}` +
+      (g.error ? `<div class="cardnote bad">更新失败${g.items.length ? '，显示的是上次数据' : ''}：${esc(g.error)}</div>` : '');
+    mktTimes[i] = g.time;
   } catch (e) {
-    $('mkterr').hidden = false; $('mkterr').textContent = '行情加载失败';
+    card.innerHTML = `<h2>${mktGroups[i]}</h2><div class="cardnote bad">加载失败</div>`;
+  }
+  card.classList.remove('loading');
+  const t = Math.max(0, ...Object.values(mktTimes));
+  if (t) $('mktfoot').textContent = `数据来自新浪财经、CEPEA（巴西，每日收盘） · 每 30 秒刷新 · 红涨绿跌 · 更新于 ${new Date(t*1000).toLocaleTimeString('zh-CN')}`;
+}
+async function markets() {
+  if (!mktGroups) {
+    try { mktGroups = await (await fetch('/api/markets', {cache: 'no-store'})).json(); }
+    catch (e) { $('mkterr').hidden = false; $('mkterr').textContent = '行情加载失败'; return; }
+    $('mkterr').hidden = true;
+    $('mkt').innerHTML = mktGroups.map((t, i) => `<section class="card loading" id="mkt${i}"><h2>${t}</h2><div class="spin"></div></section>`).join('');
+  }
+  mktGroups.forEach((_, i) => marketGroup(i));
+}
+
+// watched stocks on the info page (Pixel only; the list is filled in by server.py)
+const WATCH = __WATCH__;
+const fmtBig = v => v == null ? '–' : v >= 1e12 ? (v/1e12).toFixed(2) + ' 万亿' : v >= 1e8 ? (v/1e8).toFixed(1) + ' 亿' : v >= 1e4 ? (v/1e4).toFixed(0) + ' 万' : String(v);
+if (WATCH.length) {
+  $('stocks').hidden = false;
+  $('stockgrid').innerHTML = WATCH.map(([t, en]) => `<section class="card stk loading" id="stk-${t}"><h2>${en} · ${t}</h2><div class="spin"></div></section>`).join('');
+}
+async function stocks() {
+  if (!WATCH.length) return;
+  try {
+    const w = await (await fetch('/api/watch', {cache: 'no-store'})).json();
+    w.items.forEach(q => {
+      const card = $('stk-' + q.ticker);
+      if (!card) return;
+      if (q.name == null || q.price == null) {
+        card.innerHTML = `<h2>${q.en} · ${q.ticker}</h2><div class="cardnote bad">${w.error ? '更新失败：' + esc(w.error) : '暂无数据'}</div>`;
+      } else {
+        const c = updown(q.chg), sg = sign(q.chg);
+        card.innerHTML = `<h2>${q.en} · ${q.ticker}</h2>
+          <div class="big ${c}">${fmtNum(q.price)}</div>
+          <div class="sub ${c}">${sg}${fmtNum(q.chg)} · ${sg}${q.pct.toFixed(2)}% · ${q.name}</div>
+          <dl>
+            <dt>今日区间</dt><dd>${fmtNum(q.low)} – ${fmtNum(q.high)}</dd>
+            <dt>开盘 / 昨收</dt><dd>${fmtNum(q.open)} / ${fmtNum(q.prev)}</dd>
+            <dt>52 周区间</dt><dd>${fmtNum(q.low52)} – ${fmtNum(q.high52)}</dd>
+            <dt>市值</dt><dd>${fmtBig(q.mcap)} 美元</dd>
+            <dt>成交量</dt><dd>${fmtBig(q.volume)} 股</dd>
+            <dt>市盈率</dt><dd>${q.pe ? q.pe.toFixed(1) : '–'}</dd>
+            ${q.ah_price ? `<dt>盘后</dt><dd class="${updown(q.ah_pct)}">${fmtNum(q.ah_price)} (${sign(q.ah_pct)}${q.ah_pct.toFixed(2)}%)</dd>` : ''}
+          </dl>
+          <div class="cardnote">收盘 ${q.time}${q.ah_price ? ' · 盘后 ' + q.ah_time : ''}${w.error ? ' · 更新失败，显示上次数据' : ''}</div>`;
+      }
+      card.classList.remove('loading');
+    });
+  } catch (e) {
+    WATCH.forEach(([t, en]) => { const c = $('stk-' + t);
+      if (c.classList.contains('loading')) { c.innerHTML = `<h2>${en} · ${t}</h2><div class="cardnote bad">加载失败</div>`; c.classList.remove('loading'); } });
   }
 }
 
@@ -329,7 +406,8 @@ function show() {
   document.querySelectorAll('.side a').forEach(a => a.classList.toggle('on', a.dataset.page === page));
   $('page-info').hidden = $('meta').hidden = page !== 'info'; $('page-markets').hidden = page !== 'markets'; $('page-news').hidden = page !== 'news';
   timers.forEach(clearInterval);
-  if (page === 'info') { tick(); history(); timers = [setInterval(tick, 5000), setInterval(history, 60000)]; }
+  if (page === 'info') { tick(); history(); stocks();
+    timers = [setInterval(tick, 5000), setInterval(history, 60000), setInterval(stocks, 30000)]; }
   else if (page === 'news') { loadNews(); timers = [setInterval(loadNews, 600000)]; }
   else { markets(); timers = [setInterval(markets, 30000)]; }
 }
