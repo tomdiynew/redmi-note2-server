@@ -268,11 +268,9 @@ def market_group(i):
     return {"title": MARKETS[i][0], "items": c["data"] or [], "time": c["time"], "error": c["error"]}
 
 
-# ---- watched US stocks on the info page (Pixel only): (sina code, ticker)
+# ---- watched US stocks on the info page: (sina code, ticker)
 WATCH = [("gb_spcx", "SPCX"), ("gb_ame", "AME"), ("gb_amd", "AMD"), ("gb_nvda", "NVDA"), ("gb_intc", "INTC")]
 WATCH_NAMES = {"gb_spcx": "SpaceX", "gb_ame": "AMETEK", "gb_amd": "AMD", "gb_nvda": "NVIDIA", "gb_intc": "Intel"}
-if SITE != "Pixel":
-    WATCH = []
 
 
 def fetch_watch():

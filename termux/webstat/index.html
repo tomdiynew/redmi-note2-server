@@ -339,7 +339,7 @@ async function markets() {
   mktGroups.forEach((_, i) => marketGroup(i));
 }
 
-// watched stocks on the info page (Pixel only; the list is filled in by server.py)
+// watched stocks on the info page (the list is filled in by server.py)
 const WATCH = __WATCH__;
 const fmtBig = v => v == null ? '–' : v >= 1e12 ? (v/1e12).toFixed(2) + ' 万亿' : v >= 1e8 ? (v/1e8).toFixed(1) + ' 亿' : v >= 1e4 ? (v/1e4).toFixed(0) + ' 万' : String(v);
 if (WATCH.length) {
