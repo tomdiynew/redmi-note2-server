@@ -269,8 +269,10 @@ def market_group(i):
 
 
 # ---- watched US stocks on the info page: (sina code, ticker)
-WATCH = [("gb_spcx", "SPCX"), ("gb_ame", "AME"), ("gb_amd", "AMD"), ("gb_nvda", "NVDA"), ("gb_intc", "INTC")]
-WATCH_NAMES = {"gb_spcx": "SpaceX", "gb_ame": "AMETEK", "gb_amd": "AMD", "gb_nvda": "NVIDIA", "gb_intc": "Intel"}
+WATCH = [("gb_spcx", "SPCX"), ("gb_ame", "AME"), ("gb_amd", "AMD"), ("gb_nvda", "NVDA"), ("gb_intc", "INTC"),
+         ("gb_tsla", "TSLA"), ("gb_aapl", "AAPL")]
+WATCH_NAMES = {"gb_spcx": "SpaceX", "gb_ame": "AMETEK", "gb_amd": "AMD", "gb_nvda": "NVIDIA", "gb_intc": "Intel",
+               "gb_tsla": "Tesla", "gb_aapl": "Apple"}
 
 
 def fetch_watch():
