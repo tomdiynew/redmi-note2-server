@@ -87,6 +87,12 @@
   .card .cardnote.bad { color: var(--bad); }
   .stocks-title { font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: 1px; margin: 18px 0 10px; }
   .stk .big { font-size: 28px; }
+  .stocks-title .pill { margin: 0 6px; letter-spacing: 0; font-weight: 600; }
+  .stocks-title span#stockstate { font-weight: 400; letter-spacing: 0; }
+  .stk .ext { margin-top: 8px; padding: 6px 10px; border-radius: 8px; background: var(--bg); font-variant-numeric: tabular-nums; }
+  .stk .ext span { font-weight: 600; } .stk .ext b { font-size: 16px; margin: 0 4px; }
+  .stk .ext small { color: var(--muted); margin-left: 4px; }
+  .stk .ext.up { color: var(--accent); } .stk .ext.down { color: var(--good); }
   .stk .big.up, .stk .sub.up { color: var(--accent); } .stk .big.down, .stk .sub.down { color: var(--good); }
   /* news page */
   .news ol { margin: 0; padding-left: 22px; }
@@ -181,7 +187,7 @@
   </div>
 
   <div id="stocks" hidden>
-    <div class="stocks-title">关注股票 · 美股（美元）</div>
+    <div class="stocks-title">关注股票 · 美股（美元） <span id="stockstate"></span></div>
     <div class="grid" id="stockgrid"></div>
   </div>
 
@@ -339,43 +345,58 @@ async function markets() {
   mktGroups.forEach((_, i) => marketGroup(i));
 }
 
-// watched stocks on the info page (the list is filled in by server.py)
+// watched stocks on the info page. The list from server.py only lays out the
+// first skeleton; cards are (re)built from /api/watch, so an open tab picks up
+// newly added tickers without a reload.
 const WATCH = __WATCH__;
 const fmtBig = v => v == null ? '–' : v >= 1e12 ? (v/1e12).toFixed(2) + ' 万亿' : v >= 1e8 ? (v/1e8).toFixed(1) + ' 亿' : v >= 1e4 ? (v/1e4).toFixed(0) + ' 万' : String(v);
-if (WATCH.length) {
-  $('stocks').hidden = false;
-  $('stockgrid').innerHTML = WATCH.map(([t, en]) => `<section class="card stk loading" id="stk-${t}"><h2>${en} · ${t}</h2><div class="spin"></div></section>`).join('');
-}
+const pct = v => v == null ? '–' : sign(v) + v.toFixed(2) + '%';
+const stkCard = (t, en) => {
+  let c = $('stk-' + t);
+  if (!c) { c = document.createElement('section'); c.className = 'card stk loading'; c.id = 'stk-' + t;
+    c.innerHTML = `<h2>${en} · ${t}</h2><div class="spin"></div>`; $('stockgrid').appendChild(c); }
+  return c;
+};
+WATCH.forEach(([t, en]) => stkCard(t, en));
+$('stocks').hidden = !WATCH.length;
 async function stocks() {
-  if (!WATCH.length) return;
   try {
     const w = await (await fetch('/api/watch', {cache: 'no-store'})).json();
+    const ss = w.session, open = ss.state === 'open';
+    $('stocks').hidden = !w.items.length;
+    $('stockstate').innerHTML = `<span class="pill ${open ? 'good' : ss.state === 'closed' ? '' : 'warn'}">${ss.label}</span>
+      纽约 周${ss.weekday} ${ss.ny_time} ${ss.tz}${open ? '' : ' · 主价格为上一交易日收盘'}`;
+    const keep = new Set(w.items.map(q => 'stk-' + q.ticker));
+    [...$('stockgrid').children].forEach(c => keep.has(c.id) || c.remove());
     w.items.forEach(q => {
-      const card = $('stk-' + q.ticker);
-      if (!card) return;
+      const card = stkCard(q.ticker, q.en);
+      $('stockgrid').appendChild(card);   // keep the server's order
       if (q.name == null || q.price == null) {
         card.innerHTML = `<h2>${q.en} · ${q.ticker}</h2><div class="cardnote bad">${w.error ? '更新失败：' + esc(w.error) : '暂无数据'}</div>`;
       } else {
-        const c = updown(q.chg), sg = sign(q.chg);
+        const c = updown(q.chg), x = updown(q.ext_chg);
+        const ext = q.ext_price ? `<div class="ext ${x}"><span>${q.ext_kind}</span> <b>${fmtNum(q.ext_price)}</b>
+            ${sign(q.ext_chg)}${fmtNum(q.ext_chg)} · ${pct(q.ext_pct)} <small>${q.ext_time}</small></div>` : '';
         card.innerHTML = `<h2>${q.en} · ${q.ticker}</h2>
           <div class="big ${c}">${fmtNum(q.price)}</div>
-          <div class="sub ${c}">${sg}${fmtNum(q.chg)} · ${sg}${q.pct.toFixed(2)}% · ${q.name}</div>
+          <div class="sub ${c}">${open ? '实时' : '收盘价'} · ${sign(q.chg)}${fmtNum(q.chg)} · ${pct(q.pct)} · ${q.name}</div>
+          ${ext}
           <dl>
-            <dt>今日区间</dt><dd>${fmtNum(q.low)} – ${fmtNum(q.high)}</dd>
-            <dt>开盘 / 昨收</dt><dd>${fmtNum(q.open)} / ${fmtNum(q.prev)}</dd>
+            <dt>开盘</dt><dd>${fmtNum(q.open)}${open ? '' : ' <span class="note">（上一交易日）</span>'}</dd>
+            <dt>前收</dt><dd>${fmtNum(q.prev)}</dd>
+            <dt>${open ? '今日' : '上一交易日'}区间</dt><dd>${fmtNum(q.low)} – ${fmtNum(q.high)}</dd>
             <dt>52 周区间</dt><dd>${fmtNum(q.low52)} – ${fmtNum(q.high52)}</dd>
             <dt>市值</dt><dd>${fmtBig(q.mcap)} 美元</dd>
             <dt>成交量</dt><dd>${fmtBig(q.volume)} 股</dd>
             <dt>市盈率</dt><dd>${q.pe ? q.pe.toFixed(1) : '–'}</dd>
-            ${q.ah_price ? `<dt>盘后</dt><dd class="${updown(q.ah_pct)}">${fmtNum(q.ah_price)} (${sign(q.ah_pct)}${q.ah_pct.toFixed(2)}%)</dd>` : ''}
           </dl>
-          <div class="cardnote">收盘 ${q.time}${q.ah_price ? ' · 盘后 ' + q.ah_time : ''}${w.error ? ' · 更新失败，显示上次数据' : ''}</div>`;
+          <div class="cardnote">${open ? '更新' : '收盘'} ${q.time}${w.error ? ' · 更新失败，显示上次数据' : ''}</div>`;
       }
       card.classList.remove('loading');
     });
   } catch (e) {
-    WATCH.forEach(([t, en]) => { const c = $('stk-' + t);
-      if (c.classList.contains('loading')) { c.innerHTML = `<h2>${en} · ${t}</h2><div class="cardnote bad">加载失败</div>`; c.classList.remove('loading'); } });
+    [...$('stockgrid').children].forEach(c => { if (c.classList.contains('loading')) {
+      c.innerHTML = c.querySelector('h2').outerHTML + '<div class="cardnote bad">加载失败，30 秒后重试</div>'; c.classList.remove('loading'); } });
   }
 }
 

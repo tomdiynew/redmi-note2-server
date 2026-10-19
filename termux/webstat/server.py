@@ -289,12 +289,51 @@ def fetch_watch():
                     "price": price, "chg": _f(f[4]), "pct": _f(f[2]), "prev": prev, "open": _f(f[5]),
                     "high": _f(f[6]), "low": _f(f[7]), "high52": _f(f[8]), "low52": _f(f[9]),
                     "volume": _f(f[10]), "mcap": _f(f[12]), "pe": _f(f[14]),
-                    "ah_price": ah if ah and ah != price else None, "ah_pct": _f(f[22]),
-                    "time": f[25].replace(" EDT", "").replace(" EST", ""), "ah_time": f[24].replace(" EDT", "").replace(" EST", "")})
+                    # extended-hours quote: an AM time is pre-market, a PM one after-hours
+                    "ext_price": ah if ah and ah != price else None, "ext_pct": _f(f[22]),
+                    "ext_chg": round(ah - price, 4) if ah and price else None,
+                    "ext_kind": "盘前" if f[24][-6:-4] == "AM" or f[24].endswith("AM") else "盘后",
+                    "time": f[25].replace(" EDT", "").replace(" EST", ""), "ext_time": f[24].replace(" EDT", "").replace(" EST", "")})
     return out
 
 
 _watch = Cached(fetch_watch, MARKET_TTL)
+
+# NYSE full-day closures (early closes are ignored)
+US_HOLIDAYS = {"2026-01-01", "2026-01-19", "2026-02-16", "2026-04-03", "2026-05-25", "2026-06-19", "2026-07-03",
+               "2026-09-07", "2026-11-26", "2026-12-25", "2027-01-01", "2027-01-18", "2027-02-15", "2027-03-26",
+               "2027-05-31", "2027-06-18", "2027-07-05", "2027-09-06", "2027-11-25", "2027-12-24"}
+
+
+def ny_now():
+    """New York local time without tzdata: US DST runs from the 2nd Sunday of March
+    02:00 to the 1st Sunday of November 02:00 (local)."""
+    import datetime as dt
+    utc = dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)
+    y = utc.year
+    mar = dt.datetime(y, 3, 8 + (6 - dt.date(y, 3, 8).weekday()) % 7, 7)    # 02:00 EST = 07:00 UTC
+    nov = dt.datetime(y, 11, 1 + (6 - dt.date(y, 11, 1).weekday()) % 7, 6)  # 02:00 EDT = 06:00 UTC
+    dst = mar <= utc < nov
+    return utc + dt.timedelta(hours=-4 if dst else -5), dst
+
+
+def us_session():
+    now, dst = ny_now()
+    day, m = now.strftime("%Y-%m-%d"), now.hour * 60 + now.minute
+    if now.weekday() >= 5:
+        state, label = "closed", "休市（周末）"
+    elif day in US_HOLIDAYS:
+        state, label = "closed", "休市（假日）"
+    elif 4 * 60 <= m < 9 * 60 + 30:
+        state, label = "pre", "未开市 · 盘前交易中"
+    elif 9 * 60 + 30 <= m < 16 * 60:
+        state, label = "open", "交易中"
+    elif 16 * 60 <= m < 20 * 60:
+        state, label = "post", "已收盘 · 盘后交易中"
+    else:
+        state, label = "closed", "未开市 · 盘前 04:00 开始" if m < 4 * 60 else "已收盘 · 盘后交易已结束"
+    return {"state": state, "label": label, "ny_time": now.strftime("%m-%d %H:%M"),
+            "tz": "EDT" if dst else "EST", "weekday": "一二三四五六日"[now.weekday()]}
 
 
 # ---- daily news: each country's own outlets (major Western ones for world news),
@@ -641,7 +680,7 @@ class Handler(BaseHTTPRequestHandler):
             self._json(market_group(int(path.rsplit("/", 1)[1])))
         elif path == "/api/watch":
             c = _watch.get() if WATCH else {"time": int(time.time()), "data": [], "error": None}
-            self._json({"time": c["time"], "items": c["data"] or [], "error": c["error"]})
+            self._json({"time": c["time"], "items": c["data"] or [], "error": c["error"], "session": us_session()})
         elif path in ("/", "/index.html"):
             with open(os.path.join(HERE, "index.html"), "rb") as f:
                 self._send(200, f.read().replace(b"__SITE__", SITE.encode())
