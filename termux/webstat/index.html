@@ -89,15 +89,6 @@
   .card:not(.loading) > .spin { display: none; }
   .card .cardnote { color: var(--muted); font-size: 12px; margin-top: 10px; }
   .card .cardnote.bad { color: var(--bad); }
-  .stocks-title { font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: 1px; margin: 18px 0 10px; }
-  .stk .big { font-size: 28px; }
-  .stocks-title .pill { margin: 0 6px; letter-spacing: 0; font-weight: 600; }
-  .stocks-title span#stockstate { font-weight: 400; letter-spacing: 0; }
-  .stk .ext { margin-top: 8px; padding: 6px 10px; border-radius: 8px; background: var(--bg); font-variant-numeric: tabular-nums; }
-  .stk .ext span { font-weight: 600; } .stk .ext b { font-size: 16px; margin: 0 4px; }
-  .stk .ext small { color: var(--muted); margin-left: 4px; }
-  .stk .ext.up { color: var(--accent); } .stk .ext.down { color: var(--good); }
-  .stk .big.up, .stk .sub.up { color: var(--accent); } .stk .big.down, .stk .sub.down { color: var(--good); }
   /* news page */
   .news ol { margin: 0; padding-left: 22px; }
   .news li { padding: 6px 0; border-top: 1px solid var(--line); line-height: 1.45; }
@@ -172,28 +163,47 @@
     </section>
 
     <section class="card loading" data-load="status">
-      <h2>内存 / 存储</h2><div class="spin"></div>
+      <h2>内存</h2><div class="spin"></div>
       <div class="big" id="mem">–<small>%</small></div>
       <div class="sub" id="memtxt">–</div>
       <div class="bar"><i id="membar"></i></div>
       <dl>
-        <dt>存储已用</dt><dd id="disk">–</dd>
+        <dt>总内存</dt><dd id="memtotal">–</dd>
+        <dt>已用</dt><dd id="memused">–</dd>
+        <dt>可用</dt><dd id="memavail">–</dd>
+        <dt>空闲</dt><dd id="memfree">–</dd>
+        <dt>缓存</dt><dd id="memcache">–</dd>
+        <dt>交换区</dt><dd id="swap">–</dd>
       </dl>
+    </section>
+
+    <section class="card loading" data-load="status">
+      <h2>存储</h2><div class="spin"></div>
+      <div class="big" id="disk">–<small>%</small></div>
+      <div class="sub" id="disktxt">–</div>
       <div class="bar"><i id="diskbar"></i></div>
-      <h2 style="margin-top:16px">系统</h2>
+      <dl>
+        <dt>数据分区 /data</dt><dd id="disktotal">–</dd>
+        <dt>已用</dt><dd id="diskused">–</dd>
+        <dt>可用</dt><dd id="diskfree">–</dd>
+      </dl>
+      <dl id="parts" style="margin-top:6px"></dl>
+    </section>
+
+    <section class="card loading" data-load="status">
+      <h2>系统</h2><div class="spin"></div>
       <dl style="margin-top:0">
+        <dt>型号</dt><dd id="devmodel">–</dd>
         <dt>Android</dt><dd id="android">–</dd>
         <dt>ROM</dt><dd id="rom">–</dd>
         <dt>内核</dt><dd id="kernel">–</dd>
+        <dt>架构</dt><dd id="arch">–</dd>
+        <dt>已运行</dt><dd id="uptime2">–</dd>
         <dt>运营商</dt><dd id="cell">–</dd>
       </dl>
     </section>
   </div>
 
-  <div id="stocks" hidden>
-    <div class="stocks-title">关注股票 · 美股（美元） <span id="stockstate"></span></div>
-    <div class="grid" id="stockgrid"></div>
-  </div>
 
   <div class="charts">
     <section class="card loading" data-load="history"><h2>电量 · 24 小时</h2><div class="spin"></div><svg id="chbat" viewBox="0 0 600 160" preserveAspectRatio="none"></svg></section>
@@ -268,12 +278,24 @@ function render(s) {
   $('temps').innerHTML = Object.entries(s.temps).map(([k, v]) =>
     `<dt>${k}</dt><dd class="${v >= 70 ? 'bad' : v >= 55 ? 'warn' : ''}">${v.toFixed(1)} °C</dd>`).join('');
 
-  const mu = 1 - s.memory.available / s.memory.total, du = 1 - s.storage.free / s.storage.total;
+  const m = s.memory, st = s.storage, mu = 1 - m.available / m.total, du = 1 - st.free / st.total;
   $('mem').innerHTML = `${Math.round(mu*100)}<small>%</small>`;
-  $('memtxt').textContent = `可用 ${fmtBytes(s.memory.available)} / 共 ${fmtBytes(s.memory.total)}`;
+  $('memtxt').textContent = `已用 ${fmtBytes(m.total - m.available)} / 共 ${fmtBytes(m.total)}`;
   $('membar').style.width = mu*100 + '%';
-  $('disk').textContent = `${fmtBytes(s.storage.total - s.storage.free)} / ${fmtBytes(s.storage.total)}`;
+  $('memtotal').textContent = fmtBytes(m.total);
+  $('memused').textContent = `${fmtBytes(m.total - m.available)}（${(mu*100).toFixed(1)}%）`;
+  $('memavail').textContent = fmtBytes(m.available);
+  $('memfree').textContent = fmtBytes(m.free);
+  $('memcache').textContent = fmtBytes(m.cached);
+  $('swap').textContent = m.swap_total ? `已用 ${fmtBytes(m.swap_total - m.swap_free)} / 共 ${fmtBytes(m.swap_total)}` : '无';
+  $('disk').innerHTML = `${Math.round(du*100)}<small>%</small>`;
+  $('disktxt').textContent = `已用 ${fmtBytes(st.total - st.free)} / 共 ${fmtBytes(st.total)}`;
   $('diskbar').style.width = du*100 + '%';
+  $('disktotal').textContent = fmtBytes(st.total);
+  $('diskused').textContent = `${fmtBytes(st.total - st.free)}（${(du*100).toFixed(1)}%）`;
+  $('diskfree').textContent = fmtBytes(st.free);
+  $('parts').innerHTML = (st.parts || []).map(p => `<dt>${p.name}</dt><dd>${fmtBytes(p.total)}${p.free ? ' · 可用 ' + fmtBytes(p.free) : ' · 只读'}</dd>`).join('');
+  $('devmodel').textContent = s.device.model; $('arch').textContent = s.device.arch; $('uptime2').textContent = fmtUp(s.uptime_s);
   $('android').textContent = s.device.android; $('rom').textContent = s.device.rom;
   $('kernel').textContent = s.device.kernel; const sims = ((r.cell && r.cell.sim) || '').split(',');
   $('cell').textContent = (r.cell && r.cell.operator) || (sims[0] === 'READY' ? '卡1 已就绪（无信号）' : '无 SIM');
@@ -356,60 +378,6 @@ async function markets() {
   mktGroups.forEach((_, i) => marketGroup(i));
 }
 
-// watched stocks on the info page. The list from server.py only lays out the
-// first skeleton; cards are (re)built from /api/watch, so an open tab picks up
-// newly added tickers without a reload.
-const WATCH = __WATCH__;
-const fmtBig = v => v == null ? '–' : v >= 1e12 ? (v/1e12).toFixed(2) + ' 万亿' : v >= 1e8 ? (v/1e8).toFixed(1) + ' 亿' : v >= 1e4 ? (v/1e4).toFixed(0) + ' 万' : String(v);
-const pct = v => v == null ? '–' : sign(v) + v.toFixed(2) + '%';
-const stkCard = (t, en) => {
-  let c = $('stk-' + t);
-  if (!c) { c = document.createElement('section'); c.className = 'card stk loading'; c.id = 'stk-' + t;
-    c.innerHTML = `<h2>${en} · ${t}</h2><div class="spin"></div>`; $('stockgrid').appendChild(c); }
-  return c;
-};
-WATCH.forEach(([t, en]) => stkCard(t, en));
-$('stocks').hidden = !WATCH.length;
-async function stocks() {
-  try {
-    const w = await (await fetch('/api/watch', {cache: 'no-store'})).json();
-    const ss = w.session, open = ss.state === 'open';
-    $('stocks').hidden = !w.items.length;
-    $('stockstate').innerHTML = `<span class="pill ${open ? 'good' : ss.state === 'closed' ? '' : 'warn'}">${ss.label}</span>
-      纽约 周${ss.weekday} ${ss.ny_time} ${ss.tz}${open ? '' : ' · 主价格为上一交易日收盘'}`;
-    const keep = new Set(w.items.map(q => 'stk-' + q.ticker));
-    [...$('stockgrid').children].forEach(c => keep.has(c.id) || c.remove());
-    w.items.forEach(q => {
-      const card = stkCard(q.ticker, q.en);
-      $('stockgrid').appendChild(card);   // keep the server's order
-      if (q.name == null || q.price == null) {
-        card.innerHTML = `<h2>${q.en} · ${q.ticker}</h2><div class="cardnote bad">${w.error ? '更新失败：' + esc(w.error) : '暂无数据'}</div>`;
-      } else {
-        const c = updown(q.chg), x = updown(q.ext_chg);
-        const ext = q.ext_price ? `<div class="ext ${x}"><span>${q.ext_kind}</span> <b>${fmtNum(q.ext_price)}</b>
-            ${sign(q.ext_chg)}${fmtNum(q.ext_chg)} · ${pct(q.ext_pct)} <small>${q.ext_time}</small></div>` : '';
-        card.innerHTML = `<h2>${q.en} · ${q.ticker}</h2>
-          <div class="big ${c}">${fmtNum(q.price)}</div>
-          <div class="sub ${c}">${open ? '实时' : '收盘价'} · ${sign(q.chg)}${fmtNum(q.chg)} · ${pct(q.pct)} · ${q.name}</div>
-          ${ext}
-          <dl>
-            <dt>开盘</dt><dd>${fmtNum(q.open)}${open ? '' : ' <span class="note">（上一交易日）</span>'}</dd>
-            <dt>前收</dt><dd>${fmtNum(q.prev)}</dd>
-            <dt>${open ? '今日' : '上一交易日'}区间</dt><dd>${fmtNum(q.low)} – ${fmtNum(q.high)}</dd>
-            <dt>52 周区间</dt><dd>${fmtNum(q.low52)} – ${fmtNum(q.high52)}</dd>
-            <dt>市值</dt><dd>${fmtBig(q.mcap)} 美元</dd>
-            <dt>成交量</dt><dd>${fmtBig(q.volume)} 股</dd>
-            <dt>市盈率</dt><dd>${q.pe ? q.pe.toFixed(1) : '–'}</dd>
-          </dl>
-          <div class="cardnote">${open ? '更新' : '收盘'} ${q.time}${w.error ? ' · 更新失败，显示上次数据' : ''}</div>`;
-      }
-      card.classList.remove('loading');
-    });
-  } catch (e) {
-    [...$('stockgrid').children].forEach(c => { if (c.classList.contains('loading')) {
-      c.innerHTML = c.querySelector('h2').outerHTML + '<div class="cardnote bad">加载失败，30 秒后重试</div>'; c.classList.remove('loading'); } });
-  }
-}
 
 const esc = t => String(t).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
 async function loadNews() {
@@ -438,8 +406,7 @@ function show() {
   document.querySelectorAll('.side a').forEach(a => a.classList.toggle('on', a.dataset.page === page));
   $('page-info').hidden = $('meta').hidden = page !== 'info'; $('page-markets').hidden = page !== 'markets'; $('page-news').hidden = page !== 'news';
   timers.forEach(clearInterval);
-  if (page === 'info') { tick(); history(); stocks();
-    timers = [setInterval(tick, 5000), setInterval(history, 60000), setInterval(stocks, 30000)]; }
+  if (page === 'info') { tick(); history(); timers = [setInterval(tick, 5000), setInterval(history, 60000)]; }
   else if (page === 'news') { loadNews(); timers = [setInterval(loadNews, 600000)]; }
   else { markets(); timers = [setInterval(markets, 30000)]; }
 }

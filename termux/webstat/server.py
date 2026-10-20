@@ -596,6 +596,21 @@ def news_loop():
         time.sleep(max(60, nxt - time.time()))
 
 
+def partitions():
+    """Read-only system partitions (their size is the image size; they are always full)."""
+    out = []
+    for name, path in (("系统分区 /system", "/system"), ("厂商分区 /vendor", "/vendor")):
+        try:
+            v = os.statvfs(path)
+        except OSError:
+            continue
+        out.append({"name": name, "total": v.f_blocks * v.f_frsize, "free": v.f_bavail * v.f_frsize})
+    # Redmi: /system and /vendor are one partition; show it once
+    if len(out) == 2 and out[0]["total"] == out[1]["total"] and out[0]["free"] == out[1]["free"]:
+        out = out[:1]
+    return out
+
+
 def status():
     up = float(read("/proc/uptime", "").split()[0] or 0) if read("/proc/uptime") else time.clock_gettime(time.CLOCK_BOOTTIME)
     mem = {}
@@ -660,8 +675,11 @@ def status():
                 "cores_total": int(read("/sys/devices/system/cpu/possible", "0-0").split("-")[-1]) + 1,
                 "freq_mhz": {str(c): round(v) for c, v in freqs.items() if v}},
         "temps": temps,
-        "memory": {"total": mem.get("MemTotal"), "available": mem.get("MemAvailable", mem.get("MemFree"))},
-        "storage": {"total": vfs.f_blocks * vfs.f_frsize, "free": vfs.f_bavail * vfs.f_frsize},
+        "memory": {"total": mem.get("MemTotal"), "available": mem.get("MemAvailable", mem.get("MemFree")),
+                   "free": mem.get("MemFree"), "cached": (mem.get("Cached") or 0) + (mem.get("Buffers") or 0),
+                   "swap_total": mem.get("SwapTotal"), "swap_free": mem.get("SwapFree")},
+        "storage": {"total": vfs.f_blocks * vfs.f_frsize, "free": vfs.f_bavail * vfs.f_frsize,
+                    "parts": partitions()},
         "battery": battery,
         "network": {"rx_bps": None if net_total is None else round(sampler.net_rate[0]),
                     "tx_bps": None if net_total is None else round(sampler.net_rate[1]),
