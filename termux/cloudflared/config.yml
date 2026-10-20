@@ -1,4 +1,4 @@
-# Cloudflare tunnel "redmi": https://info.tomexp.com -> dashboard, https://esp.tomexp.com -> ESP32-C3.
+# Cloudflare tunnel "redmi": https://info.tomexp.com -> dashboard, https://c3.tomexp.com -> ESP32-C3.
 # Credentials (cert.pem, <id>.json) live only on the phone in ~/.cloudflared.
 tunnel: 2757dd82-f2b8-49e0-86ac-77f157b4a8ec
 credentials-file: /data/data/com.termux/files/home/.cloudflared/2757dd82-f2b8-49e0-86ac-77f157b4a8ec.json
@@ -8,6 +8,6 @@ ingress:
   - hostname: info.tomexp.com
     service: http://127.0.0.1:8080
   # the ESP32-C3 on the same hotspot (static IP; it can't run cloudflared itself)
-  - hostname: esp.tomexp.com
+  - hostname: c3.tomexp.com
     service: http://192.168.43.210:80
   - service: http_status:404
