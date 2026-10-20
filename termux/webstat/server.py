@@ -385,6 +385,9 @@ NEWS_FEEDS = [  # (group, [(source, rss url, language)])
 ]
 NEWS_PER_GROUP = 20
 NEWS_HOUR = 7
+# the phones share one hotspot IP; fetching all at 07:00 sharp got Google
+# Translate to answer 429, so each site takes its own minute
+NEWS_MINUTE = {"Pixel": 0, "Redmi": 4, "A15": 8}.get(SITE, 0)
 NEWS_DIR = os.path.join(os.path.expanduser("~"), "news")   # <date>.html, <date>.json, index.json
 NEWS_INDEX = os.path.join(NEWS_DIR, "index.json")
 _news_lock = threading.Lock()
@@ -427,18 +430,93 @@ def fetch_feed(url, limit):
     return out
 
 
-def translate_zh(lines, lang):
-    """Google Translate's keyless endpoint; one line per headline, batches of 10."""
+def _translate_gtx(chunk, lang):
+    """translate.googleapis.com, one request for the whole chunk (lines joined by newlines)."""
     import urllib.parse
+    body = urllib.parse.urlencode({"q": "\n".join(chunk)}).encode()
+    url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl={lang}&tl=zh-CN&dt=t"
+    d = json.loads(urlopen(Request(url, data=body, headers={"User-Agent": "Mozilla/5.0"}), timeout=20).read())
+    res = "".join(seg[0] for seg in d[0] if seg[0]).split("\n")
+    if len(res) != len(chunk):
+        raise ValueError("译文行数对不上")
+    return res
+
+
+def _translate_dict(chunk, lang):
+    """clients5.google.com (the Chrome dictionary extension's endpoint): one q per line, answers in order."""
+    import urllib.parse
+    qs = urllib.parse.urlencode([("client", "dict-chrome-ex"), ("sl", lang), ("tl", "zh-CN")] + [("q", t) for t in chunk])
+    d = json.loads(urlopen(Request("https://clients5.google.com/translate_a/t?" + qs, headers={"User-Agent": "Mozilla/5.0"}),
+                           timeout=20).read())
+    res = [x[0] if isinstance(x, list) else x for x in d]
+    if len(res) != len(chunk):
+        raise ValueError("译文行数对不上")
+    return res
+
+
+def translate_zh(lines, lang):
+    """Chinese for each line, in batches of 10. Google rate-limits (HTTP 429) when the
+    phones fetch together from the same hotspot IP, so each batch backs off and
+    retries, then falls back to a second Google endpoint; raises only if both fail."""
+    from urllib.error import HTTPError
     out = []
     for i in range(0, len(lines), 10):
-        chunk = lines[i:i + 10]
-        body = urllib.parse.urlencode({"q": "\n".join(chunk)}).encode()
-        url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl={lang}&tl=zh-CN&dt=t"
-        d = json.loads(urlopen(Request(url, data=body, headers={"User-Agent": "Mozilla/5.0"}), timeout=20).read())
-        res = "".join(seg[0] for seg in d[0] if seg[0]).split("\n")
-        out += res if len(res) == len(chunk) else [None] * len(chunk)   # misaligned -> skip
+        chunk, done, last = lines[i:i + 10], None, None
+        for fn in (_translate_gtx, _translate_dict):
+            for wait in (0, 2, 5, 10, 20, 40):
+                if wait:
+                    time.sleep(wait)
+                try:
+                    done = fn(chunk, lang)
+                    break
+                except HTTPError as e:
+                    last = e
+                    if e.code not in (429, 500, 502, 503):   # other errors: no point retrying this endpoint
+                        break
+                except Exception as e:
+                    last = e
+                    break
+            if done:
+                break
+        if not done:
+            raise last
+        out += done
+        time.sleep(1)   # be gentle between batches
     return out
+
+
+def retranslate(day):
+    """Fill in missing Chinese titles of a saved day (e.g. after rate limiting); True when none are missing."""
+    path = os.path.join(NEWS_DIR, day + ".json")
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return False
+    missing = 0
+    for g in data["groups"]:
+        for lang in {i["lang"] for i in g["items"] if i["lang"] != "zh" and not i.get("title_zh")}:
+            items = [i for i in g["items"] if i["lang"] == lang and not i.get("title_zh")]
+            try:
+                for it, zh in zip(items, translate_zh([i["title"] for i in items], lang)):
+                    it["title_zh"] = zh
+            except Exception as e:
+                print("retranslate:", day, g["title"], lang, e, flush=True)
+        left = sum(1 for i in g["items"] if i["lang"] != "zh" and not i.get("title_zh"))
+        keep = [x for x in (g.get("error") or "").split("; ") if x and not x.startswith("翻译")]
+        if left:
+            keep.append(f"翻译：还有 {left} 条没翻成")
+        g["error"] = "; ".join(keep) or None
+        missing += left
+    errors = [f"{g['title']} {g['error']}" for g in data["groups"] if g.get("error")]
+    with _news_lock:
+        _write(path, json.dumps(data, ensure_ascii=False))
+        _write(os.path.join(NEWS_DIR, day + ".html"), news_day_html(day, data))
+        idx = _news_index()
+        if day in idx:
+            idx[day].update(status="partial" if errors else "ok", error="; ".join(errors) or None)
+            _write(NEWS_INDEX, json.dumps(idx, ensure_ascii=False, indent=1))
+    return missing == 0
 
 
 def fetch_news_group(sources):
@@ -584,7 +662,7 @@ def news_loop():
         os.environ["TZ"] = tz; time.tzset()
     while True:
         now = time.time(); lt = time.localtime(now)
-        today7 = time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday, NEWS_HOUR, 0, 0, 0, 0, -1))
+        today7 = time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday, NEWS_HOUR, NEWS_MINUTE, 0, 0, 0, -1))
         if now >= today7:
             day = time.strftime("%Y-%m-%d", lt)
             if _news_index().get(day, {}).get("status") not in ("ok", "partial"):
@@ -592,6 +670,11 @@ def news_loop():
                     if fetch_news(day):
                         break
                     time.sleep(300)
+            # headlines saved but some translations missing (rate limited): try again later
+            for attempt in range(6):
+                if "翻译" not in (_news_index().get(day, {}).get("error") or "") or retranslate(day):
+                    break
+                time.sleep(600)
         nxt = today7 + 86400 if now >= today7 else today7
         time.sleep(max(60, nxt - time.time()))
 
