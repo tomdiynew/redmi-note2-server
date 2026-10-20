@@ -139,7 +139,7 @@ class Sampler:
 
 
 sampler = Sampler()
-# Site-name prefix, so the same code labels each phone's site ("Pixel 老汉移动信息网")
+# Site-name prefix, so the same code labels each phone's site ("Pixel 信息网")
 _model = getprop("ro.product.model")
 SITE = os.environ.get("WEBSTAT_SITE") or ("Pixel" if "Pixel" in _model else "A15" if _model.startswith("SM-A155")
                                           else "Redmi")
