@@ -70,8 +70,11 @@ def getprop(name):
 def cpu_times():
     """(busy+idle, idle) jiffies. The MTK kernel's iowait counter is garbage
     (goes negative / astronomically large), so it is left out entirely."""
-    with open("/proc/stat") as f:
-        p = [int(x) for x in f.readline().split()[1:8]]
+    try:
+        with open("/proc/stat") as f:
+            p = [int(x) for x in f.readline().split()[1:8]]
+    except OSError:  # hidden from apps on Android 8+ without root (Galaxy A15)
+        return None
     user, nice, system, idle, _iowait, irq, softirq = p
     busy = user + nice + system + irq + softirq
     return busy + idle, idle
@@ -83,8 +86,8 @@ class Sampler:
     def __init__(self):
         self.lock = threading.Lock()
         self.prev_cpu = cpu_times()
-        self.prev_net = (time.time(), *self.net_bytes())
-        self.cpu_pct = 0.0
+        self.prev_net = (time.time(), *(self.net_bytes() or (None, None)))
+        self.cpu_pct = 0.0 if self.prev_cpu else None
         self.net_rate = (0.0, 0.0)
         self.history = deque(maxlen=1440)
         try:
@@ -99,16 +102,23 @@ class Sampler:
             if line.strip().startswith("wlan0:"):
                 f = line.split(":", 1)[1].split()
                 return int(f[0]), int(f[8])
-        return 0, 0
+        return None
 
     def tick(self):
         with self.lock:
-            total, idle = cpu_times()
-            dt, di = total - self.prev_cpu[0], idle - self.prev_cpu[1]
-            if dt > 0:
-                self.cpu_pct = round(100.0 * (dt - di) / dt, 1)
-            self.prev_cpu = (total, idle)
-            now, (rx, tx) = time.time(), self.net_bytes()
+            cur = cpu_times()
+            if cur is None or self.prev_cpu is None:
+                self.cpu_pct = None
+            else:
+                dt, di = cur[0] - self.prev_cpu[0], cur[1] - self.prev_cpu[1]
+                if dt > 0:
+                    self.cpu_pct = round(100.0 * (dt - di) / dt, 1)
+            self.prev_cpu = cur
+            nb = self.net_bytes()
+            if nb is None or self.prev_net[1] is None:
+                self.net_rate = (None, None)
+                return
+            now, (rx, tx) = time.time(), nb
             el = now - self.prev_net[0]
             if el > 0.5:
                 self.net_rate = (max(0, rx - self.prev_net[1]) / el, max(0, tx - self.prev_net[2]) / el)
@@ -130,7 +140,9 @@ class Sampler:
 
 sampler = Sampler()
 # Site-name prefix, so the same code labels each phone's site ("Pixel 老汉移动信息网")
-SITE = os.environ.get("WEBSTAT_SITE") or ("Pixel" if "Pixel" in getprop("ro.product.model") else "Redmi")
+_model = getprop("ro.product.model")
+SITE = os.environ.get("WEBSTAT_SITE") or ("Pixel" if "Pixel" in _model else "A15" if _model.startswith("SM-A155")
+                                          else "Redmi")
 
 STATIC = {"model": getprop("ro.product.model"), "android": getprop("ro.build.version.release"),
           "rom": getprop("ro.lineage.version") or getprop("ro.cm.version") or getprop("ro.build.display.id"),
@@ -585,7 +597,7 @@ def news_loop():
 
 
 def status():
-    up = float(read("/proc/uptime", "0").split()[0])
+    up = float(read("/proc/uptime", "").split()[0] or 0) if read("/proc/uptime") else time.clock_gettime(time.CLOCK_BOOTTIME)
     mem = {}
     for line in read("/proc/meminfo", "").splitlines():
         k, v = line.split(":", 1)
@@ -598,7 +610,11 @@ def status():
         cores += range(int(a), int(b or a) + 1)
     freqs = {c: num(f"/sys/devices/system/cpu/cpu{c}/cpufreq/scaling_cur_freq", 1 / 1000) for c in cores}
     temps, tsens = {}, []
-    for z in sorted(os.listdir("/sys/class/thermal")):
+    try:
+        zones = sorted(os.listdir("/sys/class/thermal"))
+    except OSError:  # unrooted Galaxy A15: thermal zones are hidden
+        zones = []
+    for z in zones:
         if z.startswith("thermal_zone"):
             ztype = read(f"/sys/class/thermal/{z}/type", "")
             raw = num(f"/sys/class/thermal/{z}/temp")
@@ -619,25 +635,37 @@ def status():
         root["age_s"] = int(time.time() - root.get("ts", 0))
     except (OSError, ValueError):
         root = None
-    load = read("/proc/loadavg", "0 0 0").split()[:3]
+    net_total = Sampler.net_bytes()
+    load = read("/proc/loadavg")
+    load = [float(x) for x in load.split()[:3]] if load else None
+    battery = {"level": num(f"{BAT}/capacity"), "status": read(f"{BAT}/status"),
+               "health": read(f"{BAT}/health"),
+               # MTK: batt_vol (mV), batt_temp (0.1 °C); Qualcomm: voltage_now (µV), temp (0.1 °C)
+               "voltage_mv": num(f"{BAT}/batt_vol") or num(f"{BAT}/voltage_now", 1 / 1000),
+               "temp_c": num(f"{BAT}/batt_temp", 0.1) or num(f"{BAT}/temp", 0.1),
+               "usb": read("/sys/class/power_supply/usb/online") == "1",
+               "ac": read("/sys/class/power_supply/ac/online") == "1"}
+    if battery["level"] is None and root and root.get("battery"):
+        # no /sys access (unrooted Galaxy A15): Termux:API values from ~/.phonestat.json
+        rb = root["battery"]
+        battery.update({k: rb.get(k) for k in ("level", "status", "health", "voltage_mv", "temp_c")})
+        battery["usb"] = rb.get("plugged") == "PLUGGED_USB"
+        battery["ac"] = rb.get("plugged") in ("PLUGGED_AC", "PLUGGED_WIRELESS")
+        if battery["temp_c"] is not None:
+            temps["电池"] = round(battery["temp_c"], 1)
     return {
         "time": int(time.time()), "device": STATIC, "uptime_s": int(up),
-        "cpu": {"usage_pct": sampler.cpu_pct, "load": [float(x) for x in load],
+        "cpu": {"usage_pct": sampler.cpu_pct, "load": load,
                 "cores_online": len(cores),
                 "cores_total": int(read("/sys/devices/system/cpu/possible", "0-0").split("-")[-1]) + 1,
                 "freq_mhz": {str(c): round(v) for c, v in freqs.items() if v}},
         "temps": temps,
         "memory": {"total": mem.get("MemTotal"), "available": mem.get("MemAvailable", mem.get("MemFree"))},
         "storage": {"total": vfs.f_blocks * vfs.f_frsize, "free": vfs.f_bavail * vfs.f_frsize},
-        "battery": {"level": num(f"{BAT}/capacity"), "status": read(f"{BAT}/status"),
-                    "health": read(f"{BAT}/health"),
-                    # MTK: batt_vol (mV), batt_temp (0.1 °C); Qualcomm: voltage_now (µV), temp (0.1 °C)
-                    "voltage_mv": num(f"{BAT}/batt_vol") or num(f"{BAT}/voltage_now", 1 / 1000),
-                    "temp_c": num(f"{BAT}/batt_temp", 0.1) or num(f"{BAT}/temp", 0.1),
-                    "usb": read("/sys/class/power_supply/usb/online") == "1",
-                    "ac": read("/sys/class/power_supply/ac/online") == "1"},
-        "network": {"rx_bps": round(sampler.net_rate[0]), "tx_bps": round(sampler.net_rate[1]),
-                    "rx_total": Sampler.net_bytes()[0], "tx_total": Sampler.net_bytes()[1]},
+        "battery": battery,
+        "network": {"rx_bps": None if net_total is None else round(sampler.net_rate[0]),
+                    "tx_bps": None if net_total is None else round(sampler.net_rate[1]),
+                    "rx_total": net_total and net_total[0], "tx_total": net_total and net_total[1]},
         "root": root,
     }
 

@@ -238,7 +238,7 @@ function render(s) {
   const b = s.battery, r = s.root || {}, ctl = r.charge_ctl, w = r.wifi || {};
   $('dot').className = 'dot'; $('online').textContent = '在线 · ' + new Date(s.time*1000).toLocaleTimeString('zh-CN');
   $('model').textContent = s.device.model;
-  $('foot').textContent = `每 5 秒刷新 · 趋势每分钟记录一次 · ${s.device.model} / LineageOS ${s.device.rom} / Android ${s.device.android} / Termux`; $('uptime').textContent = fmtUp(s.uptime_s);
+  $('foot').textContent = `每 5 秒刷新 · 趋势每分钟记录一次 · ${s.device.model} / ${/^\d/.test(s.device.rom) ? 'LineageOS ' : ''}${s.device.rom} / Android ${s.device.android} / Termux`; $('uptime').textContent = fmtUp(s.uptime_s);
 
   $('bat').innerHTML = `${Math.round(b.level)}<small>%</small>`;
   $('batstate').textContent = STATUS[b.status] || b.status;
@@ -247,7 +247,7 @@ function render(s) {
   if (ctl) {
     $('band').style.left = ctl.low + '%'; $('band').style.width = (ctl.high - ctl.low) + '%';
     $('ctl').innerHTML = `<span class="pill ${ctl.charging === 'on' ? 'good' : 'warn'}">${ctl.charging === 'on' ? '允许充电' : '已暂停'}</span> 目标 ${ctl.low}–${ctl.high}%`;
-  } else $('ctl').textContent = '未运行';
+  } else $('ctl').textContent = r.charge_note || '未运行';
   $('volt').textContent = b.voltage_mv ? (b.voltage_mv/1000).toFixed(2) + ' V' : '–';
   $('btemp').textContent = b.temp_c != null ? b.temp_c.toFixed(1) + ' °C' : '–';
   $('health').textContent = b.health === 'Good' ? '良好' : b.health || '–';
@@ -257,11 +257,12 @@ function render(s) {
   const [sig, cls] = signal(w.rssi); $('signal').textContent = sig; $('signal').className = 'sub ' + cls;
   $('ip').textContent = w.ip || '–'; $('gw').textContent = w.gateway || '–';
   $('link').textContent = w.link_mbps ? `${w.link_mbps} Mbps · ${w.freq_mhz > 4000 ? '5' : '2.4'} GHz` : '–';
-  $('rate').innerHTML = `↓ ${fmtRate(s.network.rx_bps)}<br>↑ ${fmtRate(s.network.tx_bps)}`;
+  $('rate').innerHTML = s.network.rx_bps == null ? '–（系统不开放）' : `↓ ${fmtRate(s.network.rx_bps)}<br>↑ ${fmtRate(s.network.tx_bps)}`;
   $('total').innerHTML = `↓ ${fmtBytes(s.network.rx_total)}<br>↑ ${fmtBytes(s.network.tx_total)}`;
 
-  $('cpu').innerHTML = `${Math.round(s.cpu.usage_pct)}<small>%</small>`;
-  $('load').textContent = '负载 ' + s.cpu.load.map(x => x.toFixed(1)).join(' / ') + '（MTK 内核偏高，仅供参考）';
+  $('cpu').innerHTML = s.cpu.usage_pct == null ? '–' : `${Math.round(s.cpu.usage_pct)}<small>%</small>`;
+  $('load').textContent = s.cpu.load ? '负载 ' + s.cpu.load.map(x => x.toFixed(1)).join(' / ') + '（MTK 内核偏高，仅供参考）'
+    : '占用率和负载：Android 不对普通应用开放（未 root）';
   $('cores').textContent = `${s.cpu.cores_online} / ${s.cpu.cores_total}`;
   const f = Object.values(s.cpu.freq_mhz); $('freq').textContent = f.length ? Math.max(...f) + ' MHz' : '–';
   $('temps').innerHTML = Object.entries(s.temps).map(([k, v]) =>
