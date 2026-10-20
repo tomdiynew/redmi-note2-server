@@ -709,6 +709,16 @@ def history_loop():
         time.sleep(60)
 
 
+def page_note():
+    """Optional text shown at the end of the info page: ~/.webstat_note on the phone
+    (not in git)."""
+    try:
+        with open(os.path.join(HOME, ".webstat_note"), encoding="utf-8") as f:
+            return html.escape(f.read().strip()).encode()
+    except OSError:
+        return b""
+
+
 class Handler(BaseHTTPRequestHandler):
     def _send(self, code, body, ctype):
         self.send_response(code)
@@ -752,6 +762,7 @@ class Handler(BaseHTTPRequestHandler):
         elif path in ("/", "/index.html"):
             with open(os.path.join(HERE, "index.html"), "rb") as f:
                 self._send(200, f.read().replace(b"__SITE__", SITE.encode())
+                           .replace(b"__NOTE__", page_note())
                            .replace(b"__WATCH__", json.dumps([[t, WATCH_NAMES[c]] for c, t in WATCH]).encode()), "text/html; charset=utf-8")
         else:
             self._send(404, b"not found", "text/plain")

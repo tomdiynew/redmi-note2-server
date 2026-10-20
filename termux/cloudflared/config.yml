@@ -10,4 +10,9 @@ ingress:
   # the ESP32-C3 on the same hotspot (static IP; it can't run cloudflared itself)
   - hostname: c3.tomexp.com
     service: http://192.168.43.210:80
+  # services on the VPS 65.20.101.89, published under tomexp.com through this tunnel
+  - hostname: mini1.tomexp.com
+    service: http://65.20.101.89:8081
+  - hostname: relax.tomexp.com
+    service: http://65.20.101.89:8082
   - service: http_status:404
